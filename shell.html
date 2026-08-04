@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>강철 포화 — 각도와 게이지, 그리고 무너지는 땅</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0B0E13; --panel:#141A23; --panel2:#1A222D; --line:#26303D;
+  --brass:#C9A227; --brass-dim:#8A7326; --text:#E4E9F0; --muted:#8B99AB;
+  --alert:#E0574A; --good:#5FD37A; --t0:#5AA9E6; --t1:#E6705A; --t2:#7ED957; --t3:#C79BFF;
+  --disp:"Black Han Sans",sans-serif;
+  --sans:"IBM Plex Sans KR",system-ui,-apple-system,"Malgun Gothic",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+body{background:var(--ink);color:var(--text);font-family:var(--sans);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+button{font-family:inherit;color:inherit;cursor:pointer}
+.wrap{max-width:1320px;margin:0 auto;padding:16px 14px 40px}
+
+/* ── 헤더 ── */
+header.top{display:flex;align-items:baseline;gap:14px;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:18px;flex-wrap:wrap}
+header.top h1{font-family:var(--disp);font-size:30px;margin:0;letter-spacing:.5px;color:var(--text)}
+header.top h1 em{font-style:normal;color:var(--brass)}
+header.top p{margin:0;color:var(--muted);font-size:13px}
+
+/* ── 메뉴 ── */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+.sect{margin-bottom:18px}
+.sect > h2{font-size:12px;letter-spacing:2px;color:var(--brass);margin:0 0 10px;text-transform:uppercase;font-weight:600}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.chip{background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:8px 14px;font-size:13px;font-weight:500;transition:.12s}
+.chip:hover{border-color:var(--brass-dim)}
+.chip[aria-pressed="true"]{background:var(--brass);color:#15120A;border-color:var(--brass);font-weight:700}
+
+.grid-tanks{display:grid;grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:9px}
+.tank{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:10px;text-align:left;transition:.12s;position:relative;overflow:hidden}
+.tank:hover{border-color:var(--brass-dim);transform:translateY(-1px)}
+.tank[aria-pressed="true"]{border-color:var(--brass);box-shadow:inset 0 0 0 1px var(--brass)}
+.tank .nm{font-weight:700;font-size:15px;display:flex;align-items:center;gap:6px}
+.tank .rl{font-size:11px;color:var(--brass);letter-spacing:1px}
+.tank canvas{display:block;margin:4px 0 2px;width:100%;height:46px}
+.tank .st{display:flex;gap:8px;font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-top:3px;flex-wrap:wrap}
+.tank .wp{font-size:11px;color:#A9B7C7;margin-top:5px;line-height:1.5;border-top:1px solid var(--line);padding-top:5px}
+.tank .wp b{color:var(--text);font-weight:600}
+
+.grid-maps{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.mapc{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:0;overflow:hidden;text-align:left}
+.mapc[aria-pressed="true"]{border-color:var(--brass);box-shadow:inset 0 0 0 1px var(--brass)}
+.mapc canvas{display:block;width:100%;height:64px}
+.mapc .mi{padding:7px 9px}
+.mapc .mn{font-weight:600;font-size:13px}
+.mapc .mm{font-size:10.5px;color:var(--muted);font-family:var(--mono);margin-top:2px}
+
+.go{background:var(--brass);color:#15120A;border:0;border-radius:9px;padding:14px 30px;font-size:16px;font-weight:700;letter-spacing:1px}
+.go:disabled{opacity:.4;cursor:not-allowed}
+.ghost{background:transparent;border:1px solid var(--line);border-radius:8px;padding:11px 20px;font-size:14px}
+.ghost:hover{border-color:var(--brass-dim)}
+input.code{background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:9px 12px;color:var(--text);font-family:var(--mono);font-size:15px;letter-spacing:3px;width:150px;text-transform:uppercase}
+.note{font-size:12px;color:var(--muted);line-height:1.6}
+
+/* ── 전투 화면 ── */
+#battle{display:none}
+.stage{position:relative;background:#05070A;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+#cv{display:block;width:100%;height:auto;touch-action:none}
+
+.hud{position:absolute;left:0;right:0;pointer-events:none;font-family:var(--mono)}
+.hud.t{top:0;display:flex;justify-content:space-between;align-items:flex-start;padding:10px 12px;gap:10px}
+.hud.b{bottom:0;padding:10px 12px;display:flex;align-items:flex-end;gap:12px;justify-content:space-between}
+.plate{background:rgba(10,14,20,.82);border:1px solid rgba(120,140,165,.24);border-radius:8px;padding:7px 11px;backdrop-filter:blur(3px)}
+.wind{display:flex;align-items:center;gap:9px;font-size:13px}
+.wind .bar{width:130px;height:9px;background:rgba(255,255,255,.12);border-radius:5px;position:relative;overflow:hidden}
+.wind .bar i{position:absolute;top:0;bottom:0;background:var(--t0);display:block}
+.wind .bar u{position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:rgba(255,255,255,.5)}
+.timer{font-size:22px;font-weight:600;min-width:52px;text-align:center}
+.timer.low{color:var(--alert)}
+
+.roster{display:flex;flex-direction:column;gap:5px;align-items:flex-end}
+.pl{display:flex;align-items:center;gap:7px;font-size:12px;background:rgba(10,14,20,.8);border:1px solid rgba(120,140,165,.22);border-radius:7px;padding:4px 9px;min-width:184px;justify-content:flex-end}
+.pl.now{border-color:var(--brass);box-shadow:0 0 0 1px var(--brass)}
+.pl.out{opacity:.35;text-decoration:line-through}
+.pl .hpb{width:66px;height:7px;background:rgba(255,255,255,.13);border-radius:4px;overflow:hidden}
+.pl .hpb i{display:block;height:100%;background:var(--good)}
+.pl .dot{width:8px;height:8px;border-radius:2px}
+.pl .dl{color:var(--muted);font-size:10.5px;min-width:30px;text-align:right}
+
+.ctl{display:flex;gap:10px;align-items:flex-end;pointer-events:auto}
+.gauge{width:min(340px,42vw)}
+.gauge .lbl{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:3px}
+.gauge .track{height:17px;background:rgba(255,255,255,.1);border:1px solid rgba(120,140,165,.3);border-radius:5px;overflow:hidden;position:relative}
+.gauge .track i{display:block;height:100%;width:0;background:linear-gradient(90deg,#5FD37A,#E0C24A 55%,#E0574A);transition:width .03s linear}
+.gauge .track b{position:absolute;top:0;bottom:0;width:2px;background:rgba(255,255,255,.75);left:0;display:none}
+.ang{font-size:26px;font-weight:600;min-width:74px;text-align:center}
+.ang small{display:block;font-size:10px;color:var(--muted);letter-spacing:1px;font-weight:400}
+
+.wpns{display:flex;gap:7px}
+.wbtn{background:rgba(10,14,20,.85);border:1px solid rgba(120,140,165,.3);border-radius:7px;padding:6px 11px;text-align:left;min-width:118px;pointer-events:auto}
+.wbtn[aria-pressed="true"]{border-color:var(--brass);background:rgba(201,162,39,.16)}
+.wbtn .wn{font-size:12.5px;font-weight:600;font-family:var(--sans)}
+.wbtn .wt{font-size:10px;color:var(--brass);letter-spacing:.5px}
+.wbtn .wa{font-size:10px;color:var(--muted)}
+.wbtn:disabled{opacity:.35;cursor:not-allowed}
+.wbtn.hasicon{background-repeat:no-repeat;background-position:right 6px center;background-size:34px 34px;padding-right:46px}
+
+.items{display:flex;gap:5px;pointer-events:auto}
+.ibtn{background:rgba(10,14,20,.85);border:1px solid rgba(120,140,165,.3);border-radius:7px;
+  padding:5px 8px;display:flex;align-items:center;gap:5px;min-width:0}
+.ibtn:hover{border-color:var(--brass)}
+.ibtn .k{font-size:9.5px;color:var(--muted);font-family:var(--mono)}
+.ibtn .mk{font-size:15px;line-height:1}
+.ibtn .nm{font-size:11.5px;font-family:var(--sans)}
+.ibtn .ct{font-size:10.5px;color:var(--brass);font-weight:700}
+.ibtn.on{border-color:var(--brass);background:rgba(201,162,39,.22)}
+.ibtn:disabled{opacity:.3;cursor:not-allowed}
+.items .none{font-size:11px;color:var(--muted);padding:5px 8px}
+
+.fuel{width:96px}
+.fuel .track{height:7px;background:rgba(255,255,255,.12);border-radius:4px;overflow:hidden}
+.fuel .track i{display:block;height:100%;background:var(--t0)}
+
+.touch{display:none;gap:6px;pointer-events:auto}
+.touch button{width:52px;height:52px;border-radius:10px;background:rgba(10,14,20,.85);border:1px solid rgba(120,140,165,.3);font-size:19px}
+.touch button.fire{width:76px;background:rgba(201,162,39,.9);color:#15120A;font-weight:700;font-size:14px}
+@media (hover:none) and (pointer:coarse){ .touch{display:flex} }
+
+.toast{position:absolute;left:50%;top:22%;transform:translateX(-50%);font-family:var(--disp);font-size:34px;color:var(--brass);text-shadow:0 3px 12px rgba(0,0,0,.9);pointer-events:none;opacity:0;transition:opacity .25s}
+.toast.on{opacity:1}
+
+.over{position:absolute;inset:0;background:rgba(6,9,14,.9);display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;pointer-events:auto;backdrop-filter:blur(4px)}
+.over.on{display:flex}
+.over h2{font-family:var(--disp);font-size:46px;margin:0;color:var(--brass)}
+.over p{margin:0;color:var(--muted);font-family:var(--mono);font-size:13px}
+
+.keys{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px;margin-top:10px}
+.keys div{font-size:12px;color:var(--muted)}
+.keys kbd{background:var(--panel2);border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:1px 6px;font-family:var(--mono);font-size:11px;color:var(--text)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>강철 <em>포화</em></h1>
+  <p>각도와 게이지로 쏘고, 땅을 무너뜨려 떨어뜨린다</p>
+</header>
+
+<!-- ══ 메뉴 ══ -->
+<div id="menu">
+  <div class="card sect">
+    <h2>대전 방식</h2>
+    <div class="row" id="modeRow"></div>
+    <div class="row" style="margin-top:9px" id="aiRow"></div>
+  </div>
+
+  <div class="card sect">
+    <h2>전차 <span style="color:var(--muted);font-weight:400;letter-spacing:0">— 메인·보조 무기가 곧 전략이다</span></h2>
+    <div class="grid-tanks" id="tankGrid"></div>
+    <div class="row" id="slotRow" style="margin-top:12px"></div>
+  </div>
+
+  <div class="card sect">
+    <h2>전장 <span style="color:var(--muted);font-weight:400;letter-spacing:0">— 중력·바람·낙사 구간이 사거리표를 바꾼다</span></h2>
+    <div class="grid-maps" id="mapGrid"></div>
+  </div>
+
+  <div class="card sect">
+    <h2>온라인 대전</h2>
+    <div class="row" style="align-items:center">
+      <input class="code" id="roomCode" maxlength="6" placeholder="CODE">
+      <button class="ghost" id="btnHost">방 만들기</button>
+      <button class="ghost" id="btnJoin">참가</button>
+      <span class="note" id="netMsg"></span>
+    </div>
+    <p class="note" style="margin:9px 0 0">
+      전송체는 <code>net/supabase-transport.js</code> 하나만 갈아끼우면 Render·자체 WebSocket 어디로든 옮겨진다.
+      비워 두면 이 버튼들은 동작하지 않고, 로컬·AI 대전만 쓸 수 있다.
+    </p>
+  </div>
+
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <button class="go" id="btnStart">전투 개시</button>
+    <span class="note" id="startNote"></span>
+  </div>
+
+  <div class="card sect" style="margin-top:18px">
+    <h2>조작</h2>
+    <div class="keys">
+      <div><kbd>←</kbd> <kbd>→</kbd> 이동 (연료 소모)</div>
+      <div><kbd>↑</kbd> <kbd>↓</kbd> 포신 각도</div>
+      <div><kbd>Space</kbd> 길게 눌러 게이지 충전 · 떼면 발사</div>
+      <div><kbd>1</kbd> <kbd>2</kbd> 메인 / 보조 무기</div>
+      <div><kbd>3</kbd>~<kbd>9</kbd> 아이템 사용 (턴을 쓰지 않는다)</div>
+      <div><kbd>Z</kbd> 좌우 방향 전환</div>
+      <div><kbd>Enter</kbd> 턴 넘기기</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 전투 ══ -->
+<div id="battle">
+  <div class="stage">
+    <canvas id="cv" width="1280" height="720"></canvas>
+
+    <div class="hud t">
+      <div class="plate wind">
+        <span style="color:var(--muted)">바람</span>
+        <div class="bar"><i id="windBar"></i><u></u></div>
+        <span id="windTxt">0.0</span>
+      </div>
+      <div class="plate timer" id="timer">30</div>
+      <div class="roster" id="roster"></div>
+    </div>
+
+    <div class="hud b">
+      <div class="ctl">
+        <div class="plate ang" id="angBox">45<small>ANGLE</small></div>
+        <div class="plate gauge">
+          <div class="lbl"><span id="gLabel">게이지</span><span id="gVal">0</span></div>
+          <div class="track"><i id="gBar"></i><b id="gMark"></b></div>
+        </div>
+        <div class="plate fuel">
+          <div class="lbl" style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:3px"><span>연료</span><span id="fVal">0</span></div>
+          <div class="track"><i id="fBar"></i></div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+        <div class="items" id="items"></div>
+        <div class="wpns" id="wpns"></div>
+      </div>
+      <div class="touch" id="touch">
+        <button data-k="left">◀</button><button data-k="right">▶</button>
+        <button data-k="up">▲</button><button data-k="down">▼</button>
+        <button class="fire" data-k="fire">발사</button>
+      </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <div class="over" id="overlay">
+      <h2 id="ovTitle">승리</h2>
+      <p id="ovBody"></p>
+      <div class="row" style="justify-content:center">
+        <button class="go" id="btnAgain">다시</button>
+        <button class="ghost" id="btnMenu">메뉴로</button>
+      </div>
+    </div>
+  </div>
+  <p class="note" style="margin-top:8px" id="battleNote"></p>
+</div>
+
+</div>
+<!--SCRIPTS-->
+</body>
+</html>

@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="ko"><head><meta charset="utf-8"><title>검증 실행 중…</title>
+<style>body{background:#0E1219;color:#E4E9F0;font:13px/1.55 ui-monospace,Consolas,monospace;margin:0;padding:18px}
+pre{margin:0;white-space:pre-wrap}
+.p{color:#7FD46A}.f{color:#E0574A;font-weight:700}.h{color:#C9A227;font-weight:700}</style>
+</head><body><pre id="out"></pre>
+<script>
+/* node 가 없는 환경에서 같은 sim/test.js 를 그대로 돌리기 위한 얇은 껍데기.
+   테스트 내용은 이 파일에 한 줄도 없다 — 있으면 두 경로의 검증이 갈라진다. */
+(function(){
+  var out = document.getElementById('out');
+  var orig = console.log;
+  console.log = function(){
+    var s = Array.prototype.join.call(arguments, ' ');
+    orig.apply(console, arguments);
+    var cls = s.indexOf('✓')>=0 ? 'p' : (s.indexOf('✗')>=0 ? 'f' : (/^\d+\./.test(s.trim())?'h':''));
+    var span = document.createElement('span');
+    if (cls) span.className = cls;
+    span.textContent = s + '\n';
+    out.appendChild(span);
+  };
+})();
+</script>
+<script src="../logic/core.js"></script>
+<script src="../logic/terrain.js"></script>
+<script src="../logic/maps.js"></script>
+<script src="../logic/weapons.js"></script>
+<script src="../logic/tanks.js"></script>
+<script src="../logic/physics.js"></script>
+<script src="../logic/items.js"></script>
+<script src="../logic/match.js"></script>
+<script src="../logic/ai.js"></script>
+<script src="test.js"></script>
+</body></html>

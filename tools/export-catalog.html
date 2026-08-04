@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ko"><head><meta charset="utf-8"><title>카탈로그 내보내기</title>
+<style>body{background:#0E1219;color:#E4E9F0;font:13px/1.6 ui-monospace,Consolas,monospace;margin:0;padding:20px}
+b{color:#C9A227}.f{color:#E0574A}</style></head>
+<body><pre id="out">내보내는 중…</pre>
+<script src="../logic/core.js"></script>
+<script src="../logic/terrain.js"></script>
+<script src="../logic/maps.js"></script>
+<script src="../logic/weapons.js"></script>
+<script src="../logic/tanks.js"></script>
+<script>
+/* tools/export-catalog.html — 전차·무기·맵 표를 docs/catalog.json 으로 뽑는다.
+   개발 서버(tools/devserver.py)를 띄운 상태에서 이 페이지를 한 번 열면 된다.
+
+   왜 JSON 사본을 두는가: 언리얼 툴셋은 파이썬이라 logic/*.js 를 실행할 수 없다.
+   그렇다고 파이썬에서 JS 리터럴을 파싱하면 두 개의 파서를 유지하게 되고, 언젠가 갈라진다.
+   진실은 언제나 logic/*.js 이고, catalog.json 은 그 사본이다. 사본은 손으로 고치지 않는다. */
+(function () {
+  var out = document.getElementById('out');
+  function log(s, cls) { out.innerHTML += '\n' + (cls ? '<span class="' + cls + '">' + s + '</span>' : s); }
+
+  var W = TFWeapons, T = TFTanks, M = TFMaps;
+
+  var weapons = Object.keys(W.all).map(function (id) {
+    var w = W.all[id];
+    return {
+      id: w.id, name: w.name, kind: w.kind, type: w.type,
+      dmg: w.dmg, radius: w.rad, push: w.push, delay: w.delay || 0,
+      ammo: w.ammo || 0, shots: w.shots || 1, spread: w.spread || 0,
+      gravity_mul: w.grav, wind_mul: w.wind, speed_mul: w.speed,
+      homing: !!w.homing, drill_px: w.drill || 0,
+      split_count: w.split ? w.split.n : 0, split_at: w.split ? w.split.at : '',
+      pierce_tanks: w.pierceTanks || 0,
+      effective_value: W.value(id) == null ? 0 : Math.round(W.value(id) * 1000) / 1000,
+      description: w.desc || ''
+    };
+  });
+
+  var tanks = T.list.map(function (t) {
+    var hull = t.shape.hull, min = 1e9, max = -1e9;
+    for (var i = 0; i < hull.length; i++) { if (hull[i][0] < min) min = hull[i][0]; if (hull[i][0] > max) max = hull[i][0]; }
+    return {
+      id: t.id, name: t.name, role: t.role,
+      hp: t.hp, armor: t.armor, mass: t.mass, fuel: t.fuel, climb: t.climb,
+      power_mul: t.power, angle_min: t.angle[0], angle_max: t.angle[1],
+      main_weapon: t.main, sub_weapon: t.sub,
+      hull_width: max - min, skin: t.shape.skin, trim: t.shape.trim,
+      note: t.note
+    };
+  });
+
+  var maps = M.list.map(function (m) {
+    return {
+      id: m.id, name: m.name, width: m.w, height: m.h,
+      gravity: m.gravity, wind_max: m.wind, settles: m.settle !== false,
+      base: m.base, void_y: (m.voidY || 1) * m.h,
+      spawn_count: m.spawn.length, note: m.note
+    };
+  });
+
+  var doc = {
+    generated_by: 'tools/export-catalog.html',
+    source_of_truth: 'logic/tanks.js, logic/weapons.js, logic/maps.js',
+    tanks: tanks, weapons: weapons, maps: maps
+  };
+
+  var text = JSON.stringify(doc, null, 2);
+  log('전차 <b>' + tanks.length + '</b>종 · 무기 <b>' + weapons.length + '</b>종 · 맵 <b>' + maps.length + '</b>종');
+
+  fetch('/_file', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: 'tank-src/tankfort/docs/catalog.json', text: text })
+  }).then(function (r) { return r.json(); }).then(function (r) {
+    log('저장됨 <b>' + r.path + '</b>  (' + r.bytes + ' bytes)');
+    document.title = 'EXPORTED';
+  }).catch(function (e) {
+    log('실패: ' + e.message + ' — tools/devserver.py 가 떠 있는지 확인', 'f');
+    document.title = 'FAILED';
+  });
+})();
+</script></body></html>

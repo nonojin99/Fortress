@@ -1,0 +1,151 @@
+# 서버 — Supabase 와 Render 중 하나
+
+온라인 대전에 서버가 하는 일은 **한 가지뿐이다: 같은 방 코드끼리 메시지를 되뿌리는 것.**
+승패 판정도, 물리 계산도, 지형 파괴도 서버는 모른다. 전부 클라이언트가 한다.
+
+그래서 서버를 고르는 기준은 성능이 아니라 **운영 비용과 붙이는 데 걸리는 시간**이다.
+
+| | Supabase Realtime | Render + WebSocket |
+|---|---|---|
+| 서버 코드 | 없음 | `server/relay.js` (100줄) |
+| 붙이는 데 | 5분 (URL/KEY 두 줄) | 15분 (배포 + URL 한 줄) |
+| 무료 플랜 | 동시접속·메시지 한도 | 15분 유휴 시 인스턴스 정지 |
+| 지연 | 지역에 따라 100~300ms | 같은 대륙이면 40~90ms |
+| 추천 | **먼저 이걸로 시작** | 트래픽이 늘거나 지연이 문제될 때 |
+
+두 전송체는 완전히 교체 가능하다. 게임 코드는 어느 쪽을 쓰는지 모른다 —
+필요한 것은 `makeTransport(code, role, cb)` 하나뿐이다 (`net/room.js` 주석 참고).
+
+---
+
+## 왜 이렇게 얇은 서버인가
+
+포탄 하나가 나는 데 2~4초가 걸린다. 이 궤적을 서버가 계산해서 매 프레임 내려보내면
+**그 3초가 통째로 렉이 된다.** 반대로 "각도 52도, 파워 74로 쐈다"는 명령 한 줄만 보내면
+양쪽 화면에서 즉시, 동시에 포탄이 난다.
+
+이게 성립하는 조건은 하나 — **양쪽 계산 결과가 마지막 자리까지 같아야 한다.**
+그래서 `logic/core.js` 는 `Math.sin`/`Math.cos`/`Math.pow` 를 쓰지 않고 직접 만든 테이블을 쓴다.
+IEEE754 가 완전히 규정하는 연산은 `+ - * /` 와 `sqrt` 넷뿐이고, 삼각함수는 엔진마다 마지막 비트가 갈릴 수 있다.
+
+그래도 어긋날 수 있으므로, **호스트가 매 턴 시작에 스냅샷 + 해시를 흘려보낸다.**
+게스트는 자기 해시와 다를 때만 스냅샷으로 되돌린다. 어긋남은 한 턴 안에서 끝난다.
+`sim/net-test.html` 이 이 전체 경로를 검증한다 — 한 판을 중계만으로 끝내고 어긋난 턴이 0인지 센다.
+
+---
+
+## A. Supabase (권장 · 서버 코드 0줄)
+
+1. supabase.com 에서 프로젝트를 만든다.
+2. **Settings → API** 에서 `Project URL` 과 `anon public` 키를 복사한다.
+   `service_role` 키는 쓰지 않는다. 브라우저에 들어가는 키다.
+3. `net/supabase-transport.js` 의 두 줄을 채운다.
+
+```js
+var URL = 'https://xxxxxxxx.supabase.co';
+var KEY = 'eyJhbGciOi...';
+```
+
+4. 단일 파일 빌드를 쓸 거라면 `shell.html` 의 `<head>` 에 supabase-js 를 먼저 싣는다.
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+```
+
+5. `python build.py` 로 다시 빌드한다.
+
+**테이블은 만들 필요가 없다.** Realtime 브로드캐스트만 쓴다. RLS 도 건드리지 않는다.
+브로드캐스트 채널은 인증 없이 열리므로, 방 코드가 곧 비밀번호다 —
+그래서 코드는 5자리에 헷갈리는 글자(`I`, `O`, `0`, `1`)를 뺐다.
+
+> ⚠ 이 경로의 실제 통신은 제작 환경에서 검증하지 못했다. supabase.co 접속이 막혀 있었다.
+> 프로토콜은 루프백으로 12/12 검증됨. 여기서 깨진다면 원인은 프로토콜이 아니라 연결이다.
+> 먼저 볼 것: 브라우저 콘솔의 WebSocket 오류, anon 키 오타, 프로젝트 일시정지 여부.
+
+---
+
+## B. Render (지연을 줄이고 싶을 때)
+
+### 배포
+
+1. `server/` 폴더만 별도 저장소(또는 서브디렉터리)로 Render 에 연결한다.
+2. **New → Web Service**
+   - Runtime: Node
+   - Build Command: `npm install`
+   - Start Command: `node relay.js`
+   - Instance Type: Free 로 시작해도 된다
+3. 환경변수는 필요 없다. `PORT` 는 Render 가 넣어 준다.
+4. 배포 후 확인:
+
+```bash
+curl https://tankfort-relay.onrender.com/health
+```
+
+`{"ok":true,"rooms":0,"peers":0,...}` 가 나오면 끝이다.
+
+### 클라이언트 붙이기
+
+1. `net/render-transport.js` 의 `WSS_URL` 을 채운다. **`https` 가 아니라 `wss` 다.**
+
+```js
+var WSS_URL = 'wss://tankfort-relay.onrender.com';
+```
+
+2. `build.py` 의 `FILES` 에서 전송체를 바꾼다.
+
+```python
+'net/room.js',
+'net/render-transport.js',   # supabase-transport.js 를 이걸로 교체
+```
+
+3. `python build.py`
+
+### 무료 플랜의 함정
+
+Render 무료 인스턴스는 **15분간 요청이 없으면 잠든다.** 깨어나는 데 30초 이상 걸리고,
+그동안 WebSocket 은 연결되지 않는다. 대응은 이미 코드에 들어 있다.
+
+- `render-transport.js` 는 25초마다 `_ping` 을 보내 인스턴스를 깨워 둔다.
+- 끊기면 1.2초 뒤 자동 재접속하고, 끊긴 동안의 명령은 큐에 쌓아 뒀다가 다시 보낸다.
+- 판은 클라이언트에 있으므로 **재접속하면 그대로 이어서 둔다.**
+
+그래도 첫 접속이 느린 건 어쩔 수 없다. 유료 플랜($7/월)으로 올리면 이 문제는 사라진다.
+
+---
+
+## 프로토콜 (전송체와 무관)
+
+`net/room.js` 가 주고받는 것 전부. 여기 없는 메시지는 무시된다.
+
+| 메시지 | 방향 | 내용 |
+|---|---|---|
+| `{t:'hello', role}` | 양방향 | 접속 알림 |
+| `{t:'hi', role}` | 양방향 | 응답 |
+| `{t:'start', cfg}` | 호스트 → 게스트 | `{seed, mapId, mode, picks}` — 이것만으로 같은 판이 만들어진다 |
+| `{t:'cmd', c}` | 조작한 쪽 → 상대 | `{t:'aim'\|'move'\|'dir'\|'weapon'\|'fire'\|'pass', ...}` |
+| `{t:'sync', s, h}` | 호스트 → 게스트 | 턴 시작 스냅샷과 해시 |
+| `{t:'bye'}` | 양방향 | 이탈 |
+
+한 턴에 오가는 양은 명령 네댓 개, 200바이트 남짓이다.
+스냅샷은 턴당 한 번, 전차 4대 기준 600바이트 정도다. **지형은 절대 보내지 않는다** —
+같은 시드에서 같은 지형이 만들어지고, 파괴는 명령의 결과로 양쪽에서 똑같이 일어난다.
+
+---
+
+## 다른 백엔드로 옮기려면
+
+파일 하나만 새로 쓰면 된다. 조건은 이것뿐이다.
+
+```js
+root.makeTransport = function (code, role, cb) {
+  // 연결에 성공하면
+  cb(null, {
+    send: function (obj) { /* 같은 방의 상대에게 obj 를 보낸다 */ },
+    close: function () { },
+    onMessage: null        // 받으면 this.onMessage(obj) 를 호출해 준다
+  });
+  // 실패하면 cb(new Error('사람이 읽을 수 있는 이유'))
+};
+```
+
+`cb` 에 넘기는 오류 메시지는 그대로 메뉴 화면에 표시된다. 사용자가 읽고 조치할 수 있게 쓴다.

@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>시트 스튜디오 — 강철 포화</title>
+<style>
+:root{
+  --ink:#0B0E13;--panel:#141A23;--panel2:#1A222D;--line:#26303D;
+  --brass:#C9A227;--text:#E4E9F0;--muted:#8B99AB;--alert:#E0574A;--good:#5FD37A;
+  --sans:system-ui,-apple-system,"Malgun Gothic",sans-serif;--mono:ui-monospace,Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ink);color:var(--text);font-family:var(--sans);padding:20px 16px 60px}
+.wrap{max-width:1100px;margin:0 auto}
+h1{font-size:22px;margin:0 0 4px}
+h1 em{font-style:normal;color:var(--brass)}
+p.lead{color:var(--muted);font-size:13px;line-height:1.7;margin:0 0 18px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px}
+h2{font-size:11px;letter-spacing:2px;color:var(--brass);margin:0 0 10px;text-transform:uppercase}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+button,select{font-family:inherit;color:inherit;cursor:pointer}
+.chip{background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:8px 13px;font-size:13px}
+.chip[aria-pressed="true"]{background:var(--brass);color:#15120A;border-color:var(--brass);font-weight:700}
+#drop{border:2px dashed var(--line);border-radius:10px;padding:30px 18px;text-align:center;color:var(--muted);
+  font-size:14px;cursor:pointer;transition:.15s}
+#drop:hover,#drop.on{border-color:var(--brass);color:var(--text);background:rgba(201,162,39,.06)}
+.status{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:10px;min-height:18px;line-height:1.6}
+.status.err{color:var(--alert)}
+input[type=range]{width:200px;vertical-align:middle}
+label.sl{font-size:12px;color:var(--muted);font-family:var(--mono)}
+
+/* 조각 → 슬롯 배정 */
+.assign{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:10px;margin-top:6px}
+.as{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px}
+.as.used{border-color:var(--good)}
+.as canvas{display:block;width:100%;height:72px;object-fit:contain;
+  background:repeating-conic-gradient(#1c242f 0% 25%,#161d27 0% 50%) 50%/14px 14px;border-radius:5px}
+.as select{width:100%;margin-top:7px;background:var(--panel);border:1px solid var(--line);border-radius:5px;
+  padding:5px 6px;font-size:12px}
+.as .m{font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-top:4px}
+
+table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+th{color:var(--muted);font-weight:500;font-size:11px;letter-spacing:1px}
+td.v{font-family:var(--mono)}
+.ok{color:var(--good)}.no{color:var(--alert);font-weight:600}
+.verdict{font-size:15px;font-weight:700;padding:10px 14px;border-radius:8px;margin-top:10px}
+.verdict.pass{background:rgba(95,211,122,.13);color:var(--good);border:1px solid rgba(95,211,122,.35)}
+.verdict.fail{background:rgba(224,87,74,.13);color:var(--alert);border:1px solid rgba(224,87,74,.35)}
+.slots{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.slot{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:4px 9px;font-size:11.5px;font-family:var(--mono)}
+.slot.have{border-color:var(--good);color:var(--good)}
+.go{background:var(--brass);color:#15120A;border:0;border-radius:9px;padding:12px 24px;font-size:15px;font-weight:700}
+.go:disabled{opacity:.35;cursor:not-allowed}
+.ghost{background:transparent;border:1px solid var(--line);border-radius:8px;padding:10px 16px;font-size:13px}
+code{font-family:var(--mono);background:var(--panel2);padding:1px 5px;border-radius:4px;font-size:12px}
+.note{font-size:12px;color:var(--muted);line-height:1.7}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>시트 <em>스튜디오</em></h1>
+<p class="lead">
+  나노바나나2가 만든 시트를 넣으면 배경을 지우고, 조각으로 잘라, 검사한 뒤 <code>art/art.js</code>로 내보낸다.<br>
+  <strong>몇 대가 몇 행으로 나왔든 상관없다.</strong> 행 수와 개수는 자동으로 잡고, 어느 조각을 어느 전차로 쓸지는 직접 고른다.
+</p>
+
+<div class="card">
+  <h2>1 · 어떤 슬롯을 채우는가</h2>
+  <div class="row" id="sheetRow"></div>
+  <div class="slots" id="slotList"></div>
+</div>
+
+<div class="card">
+  <h2>2 · 시트 넣기</h2>
+  <div id="drop">시트 이미지를 끌어다 놓거나 눌러서 고른다 &nbsp;·&nbsp; PNG / JPG</div>
+  <input type="file" id="file" accept="image/*" hidden>
+  <div class="row" style="margin-top:12px">
+    <label class="sl">배경 제거 강도 <input type="range" id="tol" min="14" max="60" value="36"> <span id="tolv">36</span></label>
+    <span class="note">권장 32~42. 올려도 궤도 사이 구멍은 안 뚫린다 — 실루엣만 깎인다.</span>
+  </div>
+  <div class="status" id="status"></div>
+</div>
+
+<div class="card">
+  <h2>3 · 조각을 슬롯에 배정</h2>
+  <p class="note" style="margin:0 0 10px">
+    잘린 조각마다 어느 전차로 쓸지 고른다. <strong>위로 튀어나온 무기가 달린 개체는 쓰지 않는다</strong> —
+    포신은 코드가 각도에 맞춰 따로 그리므로 겹친다. 안 쓸 조각은 &lsquo;사용 안 함&rsquo;으로 둔다.
+  </p>
+  <div class="assign" id="assign"></div>
+</div>
+
+<div class="card">
+  <h2>4 · 검사</h2>
+  <table id="tbl"><thead><tr><th>항목</th><th>측정값</th><th>기준</th><th></th></tr></thead><tbody></tbody></table>
+  <div id="verdict"></div>
+</div>
+
+<div class="card">
+  <h2>5 · 내보내기</h2>
+  <p class="note" style="margin:0 0 10px">
+    <strong>세 조를 다 끝낸 뒤 한 번만 받는다.</strong> 조를 넘겨도 앞서 배정한 조각은 그대로 남아 있고,
+    받는 파일에는 지금까지 모은 것이 전부 들어간다. <code>art</code> 폴더에는 <code>art.js</code> 하나만 있으면 된다.
+  </p>
+  <div id="tally" class="note" style="margin:0 0 10px;font-family:var(--mono)"></div>
+  <div class="row">
+    <button class="go" id="dl" disabled>art.js 내려받기</button>
+    <button class="ghost" id="post" disabled>개발 서버로 바로 저장</button>
+    <button class="ghost" id="reset">모아 둔 것 비우기</button>
+  </div>
+  <p class="note" style="margin:10px 0 0">
+    내려받은 <code>art.js</code>는 <code>tank-src/tankfort/art/art.js</code>에 두고 <code>python build.py</code>를 다시 돌린다.<br>
+    &lsquo;개발 서버로 바로 저장&rsquo;은 <code>tools/devserver.py</code>가 떠 있을 때만 동작한다.
+  </p>
+</div>
+
+</div>
+
+<script src="../../../sheetlib.js"></script>
+<script src="../logic/tanks.js"></script>
+<script src="../logic/weapons.js"></script>
+<script>
+/* tools/sheet-studio.html — 시트 → art.js.
+   배경 키잉·헤일로 제거·실루엣 비교 같은 일반 연산은 저장소 루트의 sheetlib.js 를 쓴다.
+   전차 이름과 차체 폭은 logic/tanks.js 에서 직접 읽는다 — 여기에 표를 또 적으면 반드시 갈라진다.
+
+   설계상 중요한 것 두 가지.
+
+   1) 시트 모양을 강제하지 않는다.
+      "5대 1행"만 받도록 굳혀 놨더니, 실제로 받은 시트는 7대 2행과 5대 1행이었다.
+      아트를 다시 뽑게 만드는 것보다 도구가 유연한 편이 언제나 싸다.
+      행은 가로 여백에서 자동으로 찾고, 조각과 슬롯의 연결은 사람이 고른다.
+
+   2) 가로세로비가 시점을 잡는다.
+      실제로 시트가 정면도로 나온 적이 있는데 눈에는 즉시 보여도 자동 검사에는 안 걸렸다.
+      정면도 1.0~1.3, 3/4 투시 1.4~1.8, 정측면 1.8~2.8 로 확실히 갈린다. */
+(function () {
+  'use strict';
+  var SL = window.SheetLib;
+  var TANKS = window.TFTanks, WPN = window.TFWeapons;
+
+  var SHEETS = {
+    A: { label: '전차 A조 — 경량·중형', bag: 'tanks', slots: ['stinger', 'phantom', 'zephyr', 'nova', 'raven'], aspect: [1.75, 4.20], outW: 256 },
+    B: { label: '전차 B조 — 중량·특수', bag: 'tanks', slots: ['volcano', 'driller', 'kraken', 'titan', 'guardian'], aspect: [1.75, 4.20], outW: 256 },
+    C: { label: '무기 아이콘 10종', bag: 'weapons', distinct: 'ink', aspect: [0.80, 1.28], outW: 128,
+         slots: ['swarm', 'breaker', 'rain', 'mole', 'volley', 'bulwark', 'hunter', 'maelstrom', 'novaburst', 'tempest'] }
+  };
+  var GATE = { bgFlat: 12, haloMax: 0.004, iouMean: 0.62, iouWorst: 0.80, erodeMax: 0.06 };
+
+  var cur = 'A';
+  var store = { tanks: {}, weapons: {} };
+  var lastImg = null;                       // 원본 Image
+  var scene = null;                         // {img, boxes, assign[]}  현재 시트의 작업 상태
+
+  var $ = function (id) { return document.getElementById(id); };
+  var statusEl = $('status');
+  function say(m, bad) { statusEl.textContent = m; statusEl.className = 'status' + (bad ? ' err' : ''); }
+
+  if (!SL) say('sheetlib.js 를 불러오지 못했습니다. 저장소 루트에 있는지 확인하세요.', true);
+  if (!TANKS) say('logic/tanks.js 를 불러오지 못했습니다.', true);
+
+  function slotName(S, id) {
+    if (S.bag === 'tanks') { var t = TANKS.get(id); return t ? t.name : id; }
+    var w = WPN && WPN.get(id); return w ? w.name : id;
+  }
+  /* 차체 폭. render/draw.js 의 tankSpriteWidth 와 같은 계산이다 — 출처는 logic/tanks.js 하나뿐. */
+  function hullWidth(id) {
+    var t = TANKS.get(id); if (!t) return 0;
+    var h = t.shape.hull, mn = h[0][0], mx = h[0][0];
+    for (var i = 1; i < h.length; i++) { if (h[i][0] < mn) mn = h[i][0]; if (h[i][0] > mx) mx = h[i][0]; }
+    return mx - mn;
+  }
+
+  /* sheetlib 판본 보완 — 구버전에는 opaqueArea·keyEnclosed 가 없다.
+     그 파일은 캐릭터 체스 것이므로 이쪽 사정으로 고치지 않고, 없으면 여기서 채운다. */
+  if (SL && !SL.opaqueArea) {
+    SL.opaqueArea = function (img) {
+      var d = img.data, n = 0;
+      for (var i = 3; i < d.length; i += 4) if (d[i] > 24) n++;
+      return n;
+    };
+  }
+  if (SL && !SL.keyEnclosed) {
+    SL.keyEnclosed = function (img, bg, tol) {
+      var d = img.data, cleared = 0, t2 = tol * tol;
+      for (var i = 0; i < d.length; i += 4) {
+        if (d[i + 3] === 0) continue;
+        var r = d[i] - bg[0], g = d[i + 1] - bg[1], b = d[i + 2] - bg[2];
+        if (r * r + g * g + b * b < t2) { d[i + 3] = 0; cleared++; }
+      }
+      return { cleared: cleared, holes: 0 };
+    };
+  }
+
+  /* ── 시트 선택 ── */
+  function buildSheetRow() {
+    var r = $('sheetRow'); r.innerHTML = '';
+    Object.keys(SHEETS).forEach(function (k) {
+      var b = document.createElement('button');
+      b.className = 'chip'; b.textContent = SHEETS[k].label;
+      b.setAttribute('aria-pressed', String(k === cur));
+      b.onclick = function () {
+        if (k === cur) return;
+        /* 조를 바꿀 때 이전 시트를 다시 처리하면 안 된다.
+           조각 수가 우연히 새 조의 슬롯 수와 같으면 자동 배정이 돌아,
+           A조 시트의 전차들이 B조 슬롯에 조용히 덮어써진다. 실제로 5대 시트에서 그렇게 된다.
+           모아 둔 것(store)은 그대로 두고, 작업 중인 시트만 내려놓는다. */
+        cur = k;
+        scene = null; lastImg = null;
+        $('assign').innerHTML = '';
+        $('tbl').querySelector('tbody').innerHTML = '';
+        $('verdict').className = ''; $('verdict').textContent = '';
+        buildSheetRow(); buildSlots();
+        say('‘' + SHEETS[k].label + '’ 로 넘어갔다. 지금까지 모아 둔 조각은 그대로 있다 — 새 시트를 넣는다.');
+      };
+      r.appendChild(b);
+    });
+  }
+  function buildSlots() {
+    var S = SHEETS[cur], el = $('slotList'); el.innerHTML = '';
+    S.slots.forEach(function (id, i) {
+      var d = document.createElement('span');
+      var have = !!store[S.bag][id];
+      d.className = 'slot' + (have ? ' have' : '');
+      d.textContent = (i + 1) + '. ' + slotName(S, id) + ' · ' + id + (have ? ' ✓' : '');
+      el.appendChild(d);
+    });
+    var total = Object.keys(store.tanks).length + Object.keys(store.weapons).length;
+    $('dl').disabled = total === 0;
+    $('post').disabled = total === 0;
+
+    /* 지금까지 모은 것을 조별로 보여 준다. 조를 넘나들며 작업하므로
+       "다 채웠나"를 확인할 자리가 없으면 중간에 불안해서 여러 번 받게 된다. */
+    var t = [];
+    ['A', 'B'].forEach(function (k) {
+      var S2 = SHEETS[k], have = S2.slots.filter(function (id) { return !!store.tanks[id]; });
+      var miss = S2.slots.filter(function (id) { return !store.tanks[id]; });
+      t.push(S2.label + '  ' + have.length + '/' + S2.slots.length +
+        (miss.length ? '   빠짐: ' + miss.join(' ') : '   ✓'));
+    });
+    var W2 = SHEETS.C, wh = W2.slots.filter(function (id) { return !!store.weapons[id]; });
+    t.push(W2.label + '  ' + wh.length + '/' + W2.slots.length + (wh.length === W2.slots.length ? '   ✓' : ''));
+    t.push('— 전차 ' + Object.keys(store.tanks).length + '/10, 무기 ' + Object.keys(store.weapons).length + '/10');
+    $('tally').textContent = t.join('\n');
+    $('tally').style.whiteSpace = 'pre';
+  }
+
+  /* ── 파일 읽기 ── */
+  var drop = $('drop'), file = $('file');
+  drop.onclick = function () { file.click(); };
+  ['dragenter', 'dragover'].forEach(function (e) {
+    drop.addEventListener(e, function (ev) { ev.preventDefault(); drop.classList.add('on'); });
+  });
+  ['dragleave', 'drop'].forEach(function (e) {
+    drop.addEventListener(e, function (ev) { ev.preventDefault(); drop.classList.remove('on'); });
+  });
+  drop.addEventListener('drop', function (ev) { if (ev.dataTransfer.files[0]) load(ev.dataTransfer.files[0]); });
+  file.onchange = function () { if (file.files[0]) load(file.files[0]); };
+  $('tol').oninput = function () { $('tolv').textContent = this.value; if (lastImg) process(lastImg); };
+  window.addEventListener('error', function (e) { say('스크립트 오류: ' + e.message + ' (' + e.lineno + '행)', true); });
+
+  function load(f) {
+    say('읽는 중… ' + f.name + ' (' + Math.round(f.size / 1024) + 'KB)');
+    var r = new FileReader();
+    r.onerror = function () { say('파일을 읽지 못했습니다.', true); };
+    r.onload = function () {
+      var im = new Image();
+      im.onerror = function () { say('이미지를 디코드하지 못했습니다.', true); };
+      im.onload = function () { lastImg = im; say('디코드 ' + im.width + '×' + im.height + ' · 처리 중…'); setTimeout(function () { process(im); }, 20); };
+      im.src = r.result;
+    };
+    r.readAsDataURL(f);
+  }
+
+  /* 행 자동 검출. 시트가 1행일 수도, 2행일 수도, 같은 행이 반복될 수도 있다.
+     가로로 완전히 빈 띠를 찾아 나눈다. 한 행 높이의 1/4 보다 얇은 틈은 무시한다 —
+     차체 위 안테나와 본체 사이 같은 자잘한 틈에 걸리지 않게. */
+  function autoRows(img) {
+    var W = img.width, H = img.height, d = img.data, y, x;
+    var cov = new Int32Array(H);
+    for (y = 0; y < H; y++) {
+      var c = 0;
+      for (x = 0; x < W; x++) if (d[(y * W + x) * 4 + 3] > 24) c++;
+      cov[y] = c;
+    }
+    var out = [], start = -1, gap = 0, minGap = Math.max(6, Math.round(H * 0.035));
+    for (y = 0; y < H; y++) {
+      if (cov[y] > 0) { if (start < 0) start = y; gap = 0; }
+      else if (start >= 0) { gap++; if (gap >= minGap) { out.push([start, y - gap]); start = -1; gap = 0; } }
+    }
+    if (start >= 0) out.push([start, H - 1]);
+    // 지나치게 얇은 띠(먼지·워터마크)는 버린다
+    var tallest = out.reduce(function (m, r) { return Math.max(m, r[1] - r[0]); }, 1);
+    return out.filter(function (r) { return (r[1] - r[0]) > tallest * 0.35; });
+  }
+
+  /* 한 행 안에서 차량을 가르는 열 분할.
+     sheetlib 의 bands 를 못 쓰는 이유: 그건 '픽셀이 하나라도 있으면 채워진 열'로 본다.
+     시트에는 차량 발밑을 잇는 접지선이 실제로 그려져 나오는 일이 잦고(프롬프트에 invisible 이라고 써도 그렇다),
+     그 1~2px 선이 전 폭을 가로지르면 행 전체가 조각 하나로 붙어 버린다. 실제로 그렇게 됐다.
+     그래서 '열 높이의 몇 % 이상 차 있는가'로 본다. 머리카락 같은 선은 무시되고 차체는 남는다. */
+  function colBands(rowImg) {
+    var W = rowImg.width, H = rowImg.height, d = rowImg.data, x, y;
+    var cov = new Int32Array(W);
+    for (x = 0; x < W; x++) {
+      var c = 0;
+      for (y = 0; y < H; y++) if (d[(y * W + x) * 4 + 3] > 24) c++;
+      cov[x] = c;
+    }
+    var thr = Math.max(2, Math.round(H * 0.06));       // 접지선은 넘지 못하고 차체는 넘는 선
+    var minGap = Math.max(4, Math.round(W * 0.004));
+    var out = [], start = -1, gap = 0;
+    for (x = 0; x < W; x++) {
+      if (cov[x] >= thr) { if (start < 0) start = x; gap = 0; }
+      else if (start >= 0) { gap++; if (gap >= minGap) { out.push([start, x - gap]); start = -1; gap = 0; } }
+    }
+    if (start >= 0) out.push([start, W - 1]);
+    return out;
+  }
+
+  function sub(img, y0, y1) {
+    var W = img.width, h = y1 - y0 + 1;
+    var c = document.createElement('canvas'); c.width = W; c.height = h;
+    var g = c.getContext('2d', { willReadFrequently: true });
+    var o = g.createImageData(W, h);
+    o.data.set(img.data.subarray(y0 * W * 4, (y1 + 1) * W * 4));
+    return { img: o, y0: y0 };
+  }
+
+  var MAXW = 2400;
+
+  function process(im) {
+    try {
+      var S = SHEETS[cur];
+      var k0 = Math.min(1, MAXW / im.width);
+      var W = Math.round(im.width * k0), H = Math.round(im.height * k0);
+      var c = document.createElement('canvas'); c.width = W; c.height = H;
+      var g = c.getContext('2d', { willReadFrequently: true });
+      g.drawImage(im, 0, 0, W, H);
+      var img = g.getImageData(0, 0, W, H);
+
+      var d = img.data;
+      var ca = [d[3], d[(W - 1) * 4 + 3], d[((H - 1) * W) * 4 + 3], d[((H - 1) * W + W - 1) * 4 + 3]];
+      var already = ca[0] < 8 && ca[1] < 8 && ca[2] < 8 && ca[3] < 8;
+
+      var key, halo = 0, erode = 0;
+      if (already) { key = { bg: [0, 0, 0] }; }
+      else {
+        var ref = g.getImageData(0, 0, W, H);
+        SL.keyBackground(ref, 22);
+        var refArea = SL.opaqueArea(ref);
+        key = SL.keyBackground(img, +$('tol').value);
+        SL.keyEnclosed(img, key.bg, Math.max(18, +$('tol').value * 0.8));
+        halo = SL.deHalo(img, key.bg) / (W * H);
+        erode = refArea ? Math.max(0, (refArea - SL.opaqueArea(img)) / refArea) : 0;
+      }
+      var bs = already ? { sd: 0, bg: key.bg } : SL.bgStats(img, key.bg);
+      bs.halo = halo;
+
+      var rows = autoRows(img);
+      var perRow = [];
+      for (var r = 0; r < rows.length; r++) {
+        var part = sub(img, rows[r][0], rows[r][1]);
+        var bnd = colBands(part.img);                          // 개수를 강제하지 않는다
+        var got = [];
+        for (var i = 0; i < bnd.length; i++) {
+          var b = SL.bbox(part.img, bnd[i][0], bnd[i][1]);
+          if (!b || b.w < 12 || b.h < 12) continue;
+          b.y0 += part.y0; b.y1 += part.y0;
+          got.push(b);
+        }
+        if (got.length) perRow.push(got);
+      }
+
+      /* 워터마크가 든 행을 통째로 버린다.
+         면적으로만 거르면 안 된다 — 생성기 워터마크(✦)는 차량 한 대의 20% 남짓이라 애매하게 살아남는다.
+         결정적인 차이는 '그 행이 가로로 얼마나 차 있는가'다. 차량 다섯 대가 늘어선 행은 1000px 넘게 차지하고,
+         구석의 워터마크 한 개짜리 행은 60px 밖에 안 된다. */
+      var rowSpan = perRow.map(function (g2) { return g2.reduce(function (s, b) { return s + b.w; }, 0); });
+      var maxSpan = Math.max.apply(null, rowSpan.concat([1]));
+      var boxes = [], keptRows = 0, droppedRows = 0;
+      perRow.forEach(function (g2, k) {
+        if (rowSpan[k] < maxSpan * 0.15) { droppedRows++; return; }   // 워터마크·주석 행
+        keptRows++;
+        for (var j = 0; j < g2.length; j++) boxes.push(g2[j]);
+      });
+
+      // 남은 부스러기 정리 — 다른 조각들에 비해 터무니없이 작은 것
+      if (boxes.length > 2) {
+        var areas = boxes.map(function (b) { return b.w * b.h; }).sort(function (p, q) { return p - q; });
+        var med = areas[areas.length >> 1];
+        boxes = boxes.filter(function (b) { return b.w * b.h >= med * 0.12; });
+      }
+
+      // 여러 대가 한 조각으로 붙으면 가로세로비가 터무니없이 커진다 — 원인을 짚어 준다
+      var merged = boxes.filter(function (b) { return b.w / b.h > 6; }).length;
+
+      scene = { img: img, boxes: boxes, assign: boxes.map(function () { return ''; }), bs: bs, erode: erode };
+
+      // 개수가 슬롯과 맞으면 순서대로 미리 배정해 둔다. 아니면 사람이 고른다.
+      if (boxes.length === S.slots.length) scene.assign = S.slots.slice();
+
+      renderAssign();
+      applyAssign();
+      var msg = '행 ' + keptRows + '개 · 조각 ' + boxes.length + '개 검출' +
+        (droppedRows ? ' (워터마크 행 ' + droppedRows + '개 버림)' : '') + ' · 배경 ' +
+        (already ? '이미 투명' : 'RGB(' + key.bg.map(Math.round).join(',') + ')') +
+        (boxes.length === S.slots.length ? ' · 순서대로 자동 배정했다' : ' · 아래에서 배정한다');
+      if (merged) {
+        msg += '\n⚠ 조각 ' + merged + '개의 가로세로비가 6을 넘는다 — 여러 대가 한 덩어리로 붙었다는 뜻이다.' +
+          ' 차량 사이 간격이 좁거나 시트에 가로선이 그려져 있다. 배경 제거 강도를 조금 올려 본다.';
+      }
+      say(msg, !!merged);
+    } catch (e) {
+      say('처리 실패: ' + e.message, true);
+    }
+  }
+
+  /* ── 조각 배정 UI ── */
+  function renderAssign() {
+    var S = SHEETS[cur], host = $('assign'); host.innerHTML = '';
+    if (!scene) return;
+    var src = document.createElement('canvas');
+    src.width = scene.img.width; src.height = scene.img.height;
+    src.getContext('2d').putImageData(scene.img, 0, 0);
+
+    scene.boxes.forEach(function (b, i) {
+      var cell = document.createElement('div');
+      cell.className = 'as' + (scene.assign[i] ? ' used' : '');
+
+      var cv = document.createElement('canvas');
+      cv.width = 220; cv.height = 100;
+      var g = cv.getContext('2d');
+      var k = Math.min(cv.width * 0.92 / b.w, cv.height * 0.92 / b.h);
+      g.drawImage(src, b.x0, b.y0, b.w, b.h,
+        (cv.width - b.w * k) / 2, (cv.height - b.h * k) / 2, b.w * k, b.h * k);
+      cell.appendChild(cv);
+
+      var sel = document.createElement('select');
+      var opt0 = document.createElement('option');
+      opt0.value = ''; opt0.textContent = '— 사용 안 함 —';
+      sel.appendChild(opt0);
+      S.slots.forEach(function (id) {
+        var o = document.createElement('option');
+        o.value = id; o.textContent = slotName(S, id) + (S.bag === 'tanks' ? ' (' + hullWidth(id) + ')' : '');
+        sel.appendChild(o);
+      });
+      sel.value = scene.assign[i] || '';
+      sel.onchange = function () {
+        // 같은 슬롯을 두 조각에 줄 수 없다 — 나중 것이 이긴다
+        if (sel.value) scene.assign = scene.assign.map(function (v, j) { return (j !== i && v === sel.value) ? '' : v; });
+        scene.assign[i] = sel.value;
+        renderAssign(); applyAssign();
+      };
+      cell.appendChild(sel);
+
+      var m = document.createElement('div');
+      m.className = 'm';
+      m.textContent = b.w + '×' + b.h + '  비 ' + (b.w / b.h).toFixed(2);
+      cell.appendChild(m);
+
+      host.appendChild(cell);
+    });
+  }
+
+  /* 배정된 조각만 저장하고 검사한다. */
+  function applyAssign() {
+    var S = SHEETS[cur];
+    if (!scene) return;
+    var used = [];
+    scene.assign.forEach(function (id, i) { if (id) used.push({ id: id, box: scene.boxes[i] }); });
+
+    // 이 시트의 슬롯 중 이번에 배정되지 않은 것은 건드리지 않는다 (다른 시트에서 온 것을 지우면 안 된다)
+    used.forEach(function (u) { store[S.bag][u.id] = sliceOne(scene.img, u.box, S.outW); });
+
+    report(check(scene.img, used, scene.bs, scene.erode, S), S);
+    buildSlots();
+  }
+
+  function sliceOne(img, b, outW) {
+    var tmp = document.createElement('canvas');
+    tmp.width = img.width; tmp.height = img.height;
+    tmp.getContext('2d').putImageData(img, 0, 0);
+    var w = outW, h = Math.round(w * b.h / b.w);
+    var c = document.createElement('canvas'); c.width = w; c.height = h;
+    var g = c.getContext('2d');
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(tmp, b.x0, b.y0, b.w, b.h, 0, 0, w, h);
+    return c.toDataURL('image/png');
+  }
+
+  /* 아이콘 안쪽의 '획'만 남긴 N×N 마스크.
+     밝기 절대값으로 자르면 배지 바탕색이 바뀔 때마다 기준이 흔들린다.
+     조각 안에서의 중간값을 기준으로 삼으면 배색이 달라도 같은 결과가 나온다. */
+  function inkMask(img, box, N) {
+    var d = img.data, W = img.width, vals = [], x, y, sx, sy, o;
+    var m = new Uint8Array(N * N), lum = new Float64Array(N * N), on = new Uint8Array(N * N);
+    for (y = 0; y < N; y++) for (x = 0; x < N; x++) {
+      sx = Math.round(box.x0 + (x + 0.5) / N * box.w);
+      sy = Math.round(box.y0 + (y + 0.5) / N * box.h);
+      o = (sy * W + sx) * 4;
+      if (d[o + 3] <= 90) continue;
+      var L = 0.2126 * d[o] + 0.7152 * d[o + 1] + 0.0722 * d[o + 2];
+      lum[y * N + x] = L; on[y * N + x] = 1; vals.push(L);
+    }
+    if (vals.length < 8) return m;
+    vals.sort(function (a, b) { return a - b; });
+    var mid = vals[vals.length >> 1], hi = vals[vals.length - 1], lo = vals[0];
+    var thr = mid + (hi - mid) * 0.35;
+    if (hi - lo < 12) thr = mid;
+    for (var k = 0; k < m.length; k++) if (on[k] && lum[k] >= thr) m[k] = 1;
+    return m;
+  }
+
+  function check(img, used, bs, erode, S) {
+    var checks = [];
+    function add(name, got, want, ok) { checks.push({ name: name, got: got, want: want, ok: !!ok }); }
+
+    add('배정된 조각', used.length + ' / ' + S.slots.length, S.slots.length + '개', used.length === S.slots.length);
+    if (!used.length) return { checks: checks, pass: false };
+
+    add('배경 균일도(σ)', bs.sd.toFixed(1), '≤ ' + GATE.bgFlat, bs.sd <= GATE.bgFlat);
+    add('헤일로 제거 비율', (bs.halo * 100).toFixed(3) + '%', '≤ ' + (GATE.haloMax * 100) + '%', bs.halo <= GATE.haloMax);
+    add('실루엣 잠식률', (erode * 100).toFixed(1) + '%', '≤ ' + (GATE.erodeMax * 100) + '%', erode <= GATE.erodeMax);
+
+    var ratios = used.map(function (u) { return u.box.w / u.box.h; });
+    var rMin = Math.min.apply(null, ratios), rMax = Math.max.apply(null, ratios);
+    add('가로세로비 (시점)', rMin.toFixed(2) + ' ~ ' + rMax.toFixed(2),
+      S.aspect[0].toFixed(2) + ' ~ ' + S.aspect[1].toFixed(2), rMin >= S.aspect[0] && rMax <= S.aspect[1]);
+
+    var ink = S.distinct === 'ink';
+    var masks = used.map(function (u) { return ink ? inkMask(img, u.box, 32) : SL.silhouette(img, u.box, 32); });
+    var sum = 0, n = 0, worst = 0, worstPair = '';
+    for (var i = 0; i < masks.length; i++) for (var j = i + 1; j < masks.length; j++) {
+      var v = SL.iou(masks[i], masks[j]); sum += v; n++;
+      if (v > worst) { worst = v; worstPair = used[i].id + '↔' + used[j].id; }
+    }
+    if (n) {
+      add((ink ? '무늬' : '실루엣') + ' 평균 IoU', (sum / n).toFixed(3), '≤ ' + GATE.iouMean, sum / n <= GATE.iouMean);
+      add('최악 쌍 IoU', worst.toFixed(3) + ' (' + worstPair + ')', '≤ ' + GATE.iouWorst, worst <= GATE.iouWorst);
+    }
+
+    /* 폭 위계. 시트에 놓인 순서가 아니라 '게임 차체 폭'을 기준으로 잰다.
+       조각을 사람이 임의로 배정하므로 시트 순서는 아무 의미가 없다.
+
+       줄 세워 이웃끼리만 비교하면 안 된다. 편성표에는 차체 폭이 같은 쌍이 있고
+       (팬텀=제피르 40, 드릴러=크라켄 48), 그 둘의 정렬 순서는 임의라 올바른 배정도 탈락한다.
+       그래서 '폭이 실제로 다른 쌍'만 골라 전부 비교한다. 6% 여유는 아트가 차체 폭을
+       정확히 재현하지 못하는 몫이다. */
+    if (S.bag === 'tanks' && used.length >= 2) {
+      var bad = [], pairs = 0;
+      for (var a = 0; a < used.length; a++) for (var b2 = 0; b2 < used.length; b2++) {
+        if (hullWidth(used[a].id) >= hullWidth(used[b2].id)) continue;   // a 가 확실히 좁은 쌍만
+        pairs++;
+        if (used[a].box.w > used[b2].box.w * 1.06) bad.push(used[a].id + '>' + used[b2].id);
+      }
+      var byHull = used.slice().sort(function (p, q) { return hullWidth(p.id) - hullWidth(q.id); });
+      add('폭 위계 (차체 폭 기준)',
+        bad.length ? '뒤집힘 ' + bad.join(', ')
+          : byHull.map(function (u) { return u.id + '·' + u.box.w; }).join(' ≤ '),
+        pairs + '쌍 모두 정순', bad.length === 0);
+    }
+
+    return { checks: checks, pass: checks.every(function (c) { return c.ok; }) };
+  }
+
+  function report(res, S) {
+    var tb = $('tbl').querySelector('tbody'); tb.innerHTML = '';
+    res.checks.forEach(function (c) {
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + c.name + '</td><td class="v">' + c.got + '</td><td class="v">' + c.want +
+        '</td><td class="' + (c.ok ? 'ok' : 'no') + '">' + (c.ok ? '통과' : '탈락') + '</td>';
+      tb.appendChild(tr);
+    });
+    var v = $('verdict');
+    v.className = 'verdict ' + (res.pass ? 'pass' : 'fail');
+    v.textContent = res.pass ? '통과 — 그대로 써도 된다'
+      : '탈락 — art/PROMPTS.md 의 "탈락했을 때 무엇을 고칠 것인가" 표를 본다';
+  }
+
+  /* ── 내보내기 ── */
+  function artText() {
+    var lines = [
+      '/* art/art.js — tools/sheet-studio.html 이 생성. 손으로 고치지 않는다.',
+      '   전차 id 는 logic/tanks.js 와, 무기 id 는 logic/weapons.js 와 정확히 같아야 한다.',
+      '   build.py 가 이 파일이 있으면 번들보다 먼저 인라인한다. 없으면 게임은 벡터로 돈다. */',
+      'window.TFArtSrc = {'
+    ];
+    ['tanks', 'weapons'].forEach(function (bag, bi) {
+      var ids = Object.keys(store[bag]);
+      if (!ids.length) { lines.push('  ' + bag + ': {}' + (bi ? '' : ',')); return; }
+      lines.push('  ' + bag + ': {');
+      ids.forEach(function (id, i) {
+        lines.push('    ' + id + ': "' + store[bag][id] + '"' + (i < ids.length - 1 ? ',' : ''));
+      });
+      lines.push('  }' + (bi ? '' : ','));
+    });
+    lines.push('};');
+    return lines.join('\n');
+  }
+
+  $('dl').onclick = function () {
+    var blob = new Blob([artText()], { type: 'text/javascript' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'art.js'; a.click();
+  };
+
+  $('post').onclick = function () {
+    fetch('/_file', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: 'tank-src/tankfort/art/art.js', text: artText() })
+    }).then(function (r) { return r.json(); }).then(function (r) {
+      say('저장됨 ' + r.path + ' (' + Math.round(r.bytes / 1024) + 'KB) — 이제 python build.py');
+    }).catch(function (e) {
+      say('저장 실패: ' + e.message + ' — tools/devserver.py 가 떠 있는지 확인', true);
+    });
+  };
+
+  $('reset').onclick = function () {
+    store = { tanks: {}, weapons: {} };
+    buildSlots(); say('모아 둔 조각을 비웠습니다.');
+  };
+
+  buildSheetRow(); buildSlots();
+  window.__studio = { get scene() { return scene; }, store: store, SHEETS: SHEETS, hullWidth: hullWidth };
+})();
+</script>
+</body>
+</html>

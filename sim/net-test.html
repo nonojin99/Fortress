@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ko"><head><meta charset="utf-8"><title>네트워크 검증 실행 중…</title>
+<style>body{background:#0E1219;color:#E4E9F0;font:13px/1.55 ui-monospace,Consolas,monospace;margin:0;padding:18px}
+pre{margin:0;white-space:pre-wrap}.p{color:#7FD46A}.f{color:#E0574A;font-weight:700}.h{color:#C9A227;font-weight:700}</style>
+</head><body><pre id="out"></pre>
+<script>
+(function(){
+  var out=document.getElementById('out'), orig=console.log;
+  console.log=function(){
+    var s=Array.prototype.join.call(arguments,' ');
+    orig.apply(console,arguments);
+    var cls=s.indexOf('✓')>=0?'p':(s.indexOf('✗')>=0?'f':(/^\d+\./.test(s.trim())?'h':''));
+    var el=document.createElement('span'); if(cls) el.className=cls;
+    el.textContent=s+'\n'; out.appendChild(el);
+  };
+  window.addEventListener('error',function(e){ console.log('✗ 예외: '+e.message); document.title='FAIL'; });
+})();
+</script>
+<script src="../logic/core.js"></script>
+<script src="../logic/terrain.js"></script>
+<script src="../logic/maps.js"></script>
+<script src="../logic/weapons.js"></script>
+<script src="../logic/tanks.js"></script>
+<script src="../logic/physics.js"></script>
+<script src="../logic/items.js"></script>
+<script src="../logic/match.js"></script>
+<script src="../logic/ai.js"></script>
+<script src="../net/room.js"></script>
+<script src="net-test.js"></script>
+</body></html>

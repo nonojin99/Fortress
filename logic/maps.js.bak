@@ -1,0 +1,185 @@
+/* logic/maps.js — 전장 10종.
+   맵이 바꾸는 것은 그림이 아니라 계산이다. 중력·바람·낙사 구간 세 개가 사거리표를 전부 뒤집는다.
+   그래서 맵마다 "어떤 무기가 유리한가"를 note 에 적어 두었다. 밸런싱은 이 note 를 기준으로 한다.
+
+   base   : 지표 평균 높이 (0=꼭대기, 1=바닥)
+   gravity: px/s². 표준 540
+   wind   : 매 턴 재추첨되는 바람 세기의 최대 절댓값
+   voidY  : 이 y 를 넘어가면 낙사. 보통 h 지만 용암 맵은 더 위 */
+(function (root) {
+  'use strict';
+
+  var MAPS = [
+    {
+      id: 'ridge', name: '초원 능선', note: '표준 전장. 모든 무기가 설계값대로 동작한다. 사거리 감을 잡는 곳.',
+      w: 2200, h: 900, base: 0.62, gravity: 540, wind: 5, settle: true,
+      sky: ['#1B2E4A', '#3E6E8C', '#8FB6C0'],
+      pal: { 1: '#5C8A3A', 2: '#6B5436', 3: '#4A3B27', 4: '#2A2018' },
+      ground: [{ amp: 95, freq: 3 }, { amp: 38, freq: 8 }, { amp: 12, freq: 19 }],
+      ops: [{ op: 'roughen', count: 6, y0: 0.7, y1: 0.95, size: 22, dig: false }],
+      spawn: [[0.06, 0.24], [0.76, 0.94], [0.30, 0.44], [0.56, 0.70]]
+    },
+    {
+      id: 'canyon', name: '단절 협곡', note: '중앙이 바닥까지 뚫려 있다. 넉백 한 방이 체력 100보다 강하다.',
+      w: 2400, h: 950, base: 0.55, gravity: 560, wind: 6, settle: true,
+      sky: ['#2A1B2E', '#6B3F52', '#C08A6A'],
+      pal: { 1: '#8A6A3A', 2: '#7A4E32', 3: '#4E2F22', 4: '#2A1A14' },
+      ground: [{ amp: 60, freq: 4 }, { amp: 26, freq: 11 }],
+      ops: [
+        { op: 'gap', x0: 1010, x1: 1390, taper: 90 },
+        { op: 'roughen', count: 5, y0: 0.6, y1: 0.8, size: 18, dig: true }
+      ],
+      spawn: [[0.05, 0.30], [0.70, 0.95], [0.10, 0.22], [0.78, 0.90]]
+    },
+    {
+      id: 'isles', name: '부유 군도', note: '바닥이 없다. 빗맞아도 밀어내면 이긴다. 유도탄과 넉백이 왕.',
+      w: 2400, h: 1000, base: 1.4, gravity: 500, wind: 8, settle: false,
+      sky: ['#141C34', '#2E4478', '#7A8FC4'],
+      pal: { 1: '#6E8F5C', 2: '#5A5F72', 3: '#3C4052', 4: '#22242E' },
+      ground: [{ amp: 0, freq: 2 }],
+      ops: [
+        { op: 'island', cx: 0.13, cy: 0.66, rx: 190, ry: 74 },
+        { op: 'island', cx: 0.87, cy: 0.66, rx: 190, ry: 74 },
+        { op: 'island', cx: 0.50, cy: 0.52, rx: 150, ry: 60 },
+        { op: 'island', cx: 0.32, cy: 0.80, rx: 110, ry: 48 },
+        { op: 'island', cx: 0.68, cy: 0.80, rx: 110, ry: 48 },
+        { op: 'island', cx: 0.50, cy: 0.86, rx: 84, ry: 36 }
+      ],
+      spawn: [[0.07, 0.19], [0.81, 0.93], [0.28, 0.36], [0.64, 0.72]]
+    },
+    {
+      id: 'spires', name: '첨탑 지대', note: '기둥이 시야를 막는다. 곡사로 넘기거나 돌파탄으로 뚫거나 — 둘 중 하나.',
+      w: 2300, h: 1000, base: 0.80, gravity: 540, wind: 5, settle: false,
+      sky: ['#1A1522', '#43304E', '#9E7A94'],
+      pal: { 1: '#7E7488', 2: '#565064', 3: '#37333F', 4: '#1E1C24' },
+      ground: [{ amp: 40, freq: 5 }, { amp: 16, freq: 13 }],
+      ops: [
+        { op: 'pillar', cx: 0.27, w: 96, top: 0.30 },
+        { op: 'pillar', cx: 0.50, w: 130, top: 0.20 },
+        { op: 'pillar', cx: 0.73, w: 96, top: 0.30 },
+        { op: 'pillar', cx: 0.385, w: 62, top: 0.48 },
+        { op: 'pillar', cx: 0.615, w: 62, top: 0.48 }
+      ],
+      spawn: [[0.05, 0.20], [0.80, 0.95], [0.33, 0.42], [0.58, 0.67]]
+    },
+    {
+      id: 'mesa', name: '건조 대지', note: '계단식 평지. 사거리 싸움. 이동 연료를 아껴 고지대를 선점하는 쪽이 유리하다.',
+      w: 2600, h: 900, base: 0.68, gravity: 520, wind: 7, settle: true,
+      sky: ['#3A2416', '#8A5A2E', '#D9A45E'],
+      pal: { 1: '#C89A54', 2: '#A87038', 3: '#6E4522', 4: '#3A2614' },
+      ground: [{ amp: 110, freq: 4 }, { amp: 20, freq: 9 }],
+      ops: [
+        { op: 'pillar', cx: 0.20, w: 380, top: 0.52 },
+        { op: 'pillar', cx: 0.80, w: 380, top: 0.52 },
+        { op: 'pillar', cx: 0.50, w: 300, top: 0.40 },
+        { op: 'roughen', count: 8, y0: 0.72, y1: 0.92, size: 20, dig: false }
+      ],
+      spawn: [[0.08, 0.28], [0.72, 0.92], [0.42, 0.48], [0.52, 0.58]]
+    },
+    {
+      id: 'undercave', name: '지하 공동', note: '천장이 있다. 고각 곡사가 자기 머리 위 천장에 막힌다. 직사·돌파탄의 무대.',
+      w: 2200, h: 1000, base: 0.74, gravity: 560, wind: 3, settle: false, spawnScanY: 0.50,
+      // 지하에서 "하늘"은 빈 공간이다. 아래로 갈수록 밝아지면 암반 바닥과 값이 붙어 형태가 안 읽힌다.
+      sky: ['#04060A', '#070A10', '#0B1017'],
+      pal: { 1: '#7C8899', 2: '#525C6C', 3: '#39414E', 4: '#1C2027' },
+      ground: [{ amp: 55, freq: 5 }, { amp: 18, freq: 12 }],
+      ops: [
+        { op: 'pillar', cx: 0.5, w: 2200, top: 0.0 },      // 전체를 암반으로 채우고
+        { op: 'cave', cx: 0.5, cy: 0.52, rx: 980, ry: 210 }, // 공동을 판다
+        { op: 'cave', cx: 0.22, cy: 0.60, rx: 300, ry: 130 },
+        { op: 'cave', cx: 0.78, cy: 0.60, rx: 300, ry: 130 },
+        { op: 'roughen', count: 10, y0: 0.42, y1: 0.66, size: 26, dig: true }
+      ],
+      spawn: [[0.10, 0.26], [0.74, 0.90], [0.36, 0.44], [0.56, 0.64]]
+    },
+    {
+      id: 'bridge', name: '강철 교량', note: '다리 밑이 전부 허공이다. 다리를 끊으면 상대가 아니라 발판이 죽는다.',
+      w: 2400, h: 980, base: 1.5, gravity: 540, wind: 6, settle: false,
+      sky: ['#101820', '#294050', '#6E8C9E'],
+      pal: { 1: '#8A9099', 2: '#5E656E', 3: '#3E444C', 4: '#20242A' },
+      ground: [{ amp: 0, freq: 2 }],
+      ops: [
+        { op: 'island', cx: 0.08, cy: 0.62, rx: 170, ry: 120 },
+        { op: 'island', cx: 0.92, cy: 0.62, rx: 170, ry: 120 },
+        { op: 'arch', cx: 0.50, cy: 0.50, rx: 620, thick: 34, rise: 150 },
+        { op: 'pillar', cx: 0.34, w: 40, top: 0.52 },
+        { op: 'pillar', cx: 0.66, w: 40, top: 0.52 }
+      ],
+      spawn: [[0.05, 0.12], [0.88, 0.95], [0.38, 0.45], [0.55, 0.62]]
+    },
+    {
+      id: 'glacier', name: '빙하 균열', note: '좁은 크레바스가 여럿. 한 발 빗나가면 그 자리가 곧 무덤이 된다.',
+      w: 2500, h: 920, base: 0.60, gravity: 500, wind: 9, settle: true,
+      sky: ['#16283A', '#3C6E8E', '#BFE0EA'],
+      pal: { 1: '#DCEAF2', 2: '#9EBACC', 3: '#5C7E96', 4: '#33475A' },
+      ground: [{ amp: 70, freq: 6 }, { amp: 24, freq: 15 }],
+      ops: [
+        { op: 'gap', x0: 700, x1: 800, taper: 40 },
+        { op: 'gap', x0: 1220, x1: 1330, taper: 44 },
+        { op: 'gap', x0: 1740, x1: 1830, taper: 40 }
+      ],
+      spawn: [[0.06, 0.24], [0.78, 0.94], [0.34, 0.46], [0.56, 0.66]]
+    },
+    {
+      id: 'caldera', name: '분화구', note: '중력이 무겁고 지형이 그릇이다. 사거리가 짧아지고 근접 난전이 된다.',
+      w: 2000, h: 900, base: 0.80, gravity: 640, wind: 4, settle: true,
+      sky: ['#2A0F10', '#6E2418', '#C6603A'],
+      pal: { 1: '#7A3A28', 2: '#5A2C20', 3: '#3A1C14', 4: '#1E0F0A' },
+      ground: [{ amp: 0, freq: 2 }],
+      ops: [
+        { op: 'pillar', cx: 0.10, w: 420, top: 0.42 },
+        { op: 'pillar', cx: 0.90, w: 420, top: 0.42 },
+        { op: 'pillar', cx: 0.30, w: 260, top: 0.58 },
+        { op: 'pillar', cx: 0.70, w: 260, top: 0.58 },
+        { op: 'pillar', cx: 0.50, w: 420, top: 0.72 },
+        { op: 'roughen', count: 7, y0: 0.60, y1: 0.86, size: 22, dig: false }
+      ],
+      voidY: 0.94,
+      spawn: [[0.05, 0.18], [0.82, 0.95], [0.26, 0.36], [0.64, 0.74]]
+    },
+    {
+      id: 'ruins', name: '폐허 도시', note: '엄폐물이 많고 전부 부서진다. 범위탄으로 엄폐를 지우는 게 첫 수순.',
+      w: 2600, h: 950, base: 0.78, gravity: 540, wind: 5, settle: false,
+      sky: ['#22201C', '#4E463A', '#8E8272'],
+      pal: { 1: '#9A9084', 2: '#6E665C', 3: '#484238', 4: '#26231E' },
+      ground: [{ amp: 34, freq: 4 }, { amp: 12, freq: 14 }],
+      ops: [
+        { op: 'pillar', cx: 0.18, w: 150, top: 0.44 },
+        { op: 'pillar', cx: 0.31, w: 110, top: 0.56 },
+        { op: 'pillar', cx: 0.44, w: 170, top: 0.36 },
+        { op: 'pillar', cx: 0.56, w: 170, top: 0.36 },
+        { op: 'pillar', cx: 0.69, w: 110, top: 0.56 },
+        { op: 'pillar', cx: 0.82, w: 150, top: 0.44 },
+        { op: 'roughen', count: 14, y0: 0.40, y1: 0.74, size: 24, dig: true }
+      ],
+      spawn: [[0.04, 0.13], [0.87, 0.96], [0.36, 0.42], [0.58, 0.64]]
+    }
+  ];
+
+  var byId = {};
+  for (var i = 0; i < MAPS.length; i++) byId[MAPS[i].id] = MAPS[i];
+
+  root.TFMaps = {
+    list: MAPS,
+    get: function (id) { return byId[id] || MAPS[0]; },
+    /* 맵 정의 → 지형 spec */
+    spec: function (m) {
+      return { w: m.w, h: m.h, base: m.base, ground: m.ground, ops: m.ops, settle: m.settle };
+    },
+
+    /* 축소판. 메뉴 미리보기에 실물을 그대로 쓰면 10맵 래스터화에 1초 넘게 잡아먹는다.
+       cx/cy 는 비율이라 그대로 두고, 픽셀 단위로 적힌 값만 배율을 먹인다. */
+    thumbSpec: function (m, k) {
+      function sc(o) {
+        var n = {}, px = { rx: 1, ry: 1, w: 1, thick: 1, rise: 1, size: 1, taper: 1, x0: 1, x1: 1 };
+        for (var key in o) n[key] = px[key] ? o[key] * k : o[key];
+        return n;
+      }
+      return {
+        w: Math.round(m.w * k), h: Math.round(m.h * k), base: m.base, settle: false,
+        ground: (m.ground || []).map(function (g) { return { amp: g.amp * k, freq: g.freq }; }),
+        ops: (m.ops || []).map(sc)
+      };
+    }
+  };
+})(typeof globalThis !== 'undefined' ? globalThis : this);

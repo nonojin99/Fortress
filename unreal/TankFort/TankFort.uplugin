@@ -1,0 +1,17 @@
+{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "1.0",
+  "FriendlyName": "TankFort Tools",
+  "Description": "강철 포화(2D 전차 포격전)의 전차·무기 표를 조회·감사하고, 전장 배치를 레벨에서 편집해 맵 사양으로 내보내는 에디터 툴셋.",
+  "Category": "Editor",
+  "CreatedBy": "",
+  "CanContainContent": true,
+  "IsBetaVersion": true,
+  "Installed": false,
+  "Modules": [],
+  "Plugins": [
+    { "Name": "PythonScriptPlugin", "Enabled": true },
+    { "Name": "ToolsetRegistry", "Enabled": true }
+  ]
+}
