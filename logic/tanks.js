@@ -34,7 +34,7 @@
   var TANKS = [
     {
       id: 'raven', name: '레이븐', role: '유도',
-      hp: 82, armor: 0.00, mass: 1.00, fuel: 100, climb: 16, power: 1.00, angle: [0, 88],
+      hp: 91, armor: 0.06, mass: 1.00, fuel: 116, climb: 18, power: 1.00, angle: [0, 88],
       main: 'track', sub: 'swarm',
       note: '표준 체격에 유도를 얹었다. 조준이 서툴러도 맞는 대신, 한 방으로 끝내지 못한다.',
       shape: { hull: [[-22, 0], [-18, -11], [14, -13], [22, -4], [22, 0]], barrel: [30, 5], pivot: [2, -12], wheels: 5, skin: '#3E5C74', trim: '#7FD4FF' }
@@ -48,14 +48,14 @@
     },
     {
       id: 'volcano', name: '볼케이노', role: '범위',
-      hp: 80, armor: 0.05, mass: 1.06, fuel: 92, climb: 15, power: 1.00, angle: [8, 89],
+      hp: 87, armor: 0.09, mass: 1.08, fuel: 94, climb: 16, power: 1.00, angle: [8, 89],
       main: 'spread', sub: 'rain',
       note: '한 점을 못 뚫는다. 대신 넓게 덮어 엄폐를 지우고 상대를 열린 곳으로 몰아낸다.',
       shape: { hull: [[-23, 0], [-20, -12], [-2, -18], [18, -14], [23, -3], [23, 0]], barrel: [26, 9], pivot: [-2, -15], wheels: 5, skin: '#7A3630', trim: '#FF6B6B' }
     },
     {
       id: 'driller', name: '드릴러', role: '돌파',
-      hp: 82, armor: 0.06, mass: 1.18, fuel: 96, climb: 26, power: 0.98, angle: [0, 84],
+      hp: 82, armor: 0.05, mass: 1.18, fuel: 96, climb: 26, power: 0.98, angle: [0, 84],
       main: 'bore', sub: 'mole',
       note: '단차 26px 까지 기어오른다. 지형을 뚫고 지형을 오른다 — 엄폐가 의미 없는 유일한 전차.',
       shape: { hull: [[-24, 0], [-21, -13], [-4, -17], [20, -12], [24, -3], [24, 0]], barrel: [32, 10], pivot: [-1, -13], wheels: 6, skin: '#5E5326', trim: '#C9A227' }
@@ -69,14 +69,14 @@
     },
     {
       id: 'guardian', name: '가디언', role: '방어',
-      hp: 116, armor: 0.17, mass: 1.55, fuel: 58, climb: 11, power: 0.92, angle: [16, 89],
+      hp: 104, armor: 0.12, mass: 1.55, fuel: 58, climb: 11, power: 0.92, angle: [16, 89],
       main: 'mortar', sub: 'bulwark',
       note: '최저각 16° — 가까이 붙은 상대를 못 쏜다. 대신 절벽 옆에서는 충격파 한 방이 곧 승리다.',
       shape: { hull: [[-27, 0], [-26, -15], [-10, -21], [14, -19], [27, -7], [27, 0]], barrel: [24, 11], pivot: [-4, -18], wheels: 6, skin: '#2F5449', trim: '#6BE0C0' }
     },
     {
       id: 'phantom', name: '팬텀', role: '유도',
-      hp: 76, armor: 0.00, mass: 0.86, fuel: 132, climb: 22, power: 1.02, angle: [0, 89],
+      hp: 81, armor: 0.04, mass: 0.90, fuel: 132, climb: 22, power: 1.02, angle: [0, 89],
       main: 'wisp', sub: 'hunter',
       note: '가장 잘 휘는 탄과 가장 잘 도망가는 차체. 정면 화력이 없어 장기전으로 끌어야 한다.',
       shape: { hull: [[-20, 0], [-18, -10], [-2, -15], [14, -12], [20, -3], [20, 0]], barrel: [27, 5], pivot: [-1, -13], wheels: 5, skin: '#4A3A66', trim: '#C79BFF' }

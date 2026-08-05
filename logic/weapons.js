@@ -27,24 +27,24 @@
   var WEAPONS = {
     /* ── 레이븐 : 유도 ───────────────────────────────────────── */
     track: W({
-      id: 'track', name: '추적탄', type: '유도', dmg: 46, rad: 46, push: 1.0, delay: 92,
+      id: 'track', name: '추적탄', type: '유도', dmg: 51, rad: 47, push: 1.0, delay: 84,
       homing: { rate: 320, after: 0.40, range: 900, pull: 120 }, color: '#7FD4FF',
       desc: '착탄점을 120px까지 끌어당긴다. 그 이상 빗나간 발은 그대로 빗나간다 — 조준을 대신해 주지 않는다.'
     }),
     swarm: W({
-      id: 'swarm', name: '군체 미사일', kind: 'sub', type: '유도', dmg: 24, rad: 34, push: 0.7,
-      delay: 140, ammo: 4, shots: 3, spread: 9,
+      id: 'swarm', name: '군체 미사일', kind: 'sub', type: '유도', dmg: 27, rad: 34, push: 0.7,
+      delay: 111, ammo: 4, shots: 3, spread: 9,
       homing: { rate: 350, after: 0.35, range: 900, pull: 110 }, color: '#9AE6FF',
       desc: '세 발이 각자 착탄점을 110px까지 당긴다. 넓게 흩뿌려도 한둘은 붙지만, 크게 빗나가면 셋 다 빗나간다.'
     }),
 
     /* ── 타이탄 : 집중 ───────────────────────────────────────── */
     slug: W({
-      id: 'slug', name: '중포탄', type: '집중', dmg: 41, rad: 40, push: 1.3, delay: 116,
+      id: 'slug', name: '중포탄', type: '집중', dmg: 44, rad: 41, push: 1.3, delay: 114,
       color: '#FFB86B', desc: '무겁고 곧다. 바람을 조금 덜 탄다.', wind: 0.8, grav: 1.15
     }),
     breaker: W({
-      id: 'breaker', name: '파쇄 관통탄', kind: 'sub', type: '집중', dmg: 40, rad: 30, push: 1.0,
+      id: 'breaker', name: '파쇄 관통탄', kind: 'sub', type: '집중', dmg: 33, rad: 30, push: 1.0,
       delay: 168, ammo: 3, shots: 2, spread: 2.6, pierceTanks: 2, wind: 0.75, grav: 1.15,
       color: '#FF8A3D',
       desc: '중포탄의 3분의 2 크기 탄을 두 발 연발한다. 둘 다 전차를 뚫고 지나가므로 일직선에 둘이 서면 넷을 때린다.'
@@ -54,31 +54,31 @@
     /* 볼케이노는 '지금 아프게' 하는 게 아니라 '계속 아프게' 하는 전차다.
        burn 은 누적 겹수 — 맞은 전차는 자기 턴이 올 때마다 겹수×9 만큼 타고 한 겹씩 꺼진다. */
     spread: W({
-      id: 'spread', name: '산탄', type: '범위', dmg: 15, rad: 32, push: 0.6, delay: 100,
+      id: 'spread', name: '산탄', type: '범위', dmg: 16, rad: 33, push: 0.6, delay: 98,
       split: { at: 'apex', n: 3, spread: 22, child: 'spread_c' }, color: '#FF6B6B',
       desc: '정점에서 셋으로 갈라지고 각각 화염을 남긴다. 한 점을 못 뚫는 대신 오래 태운다.'
     }),
-    spread_c: W({ id: 'spread_c', kind: 'child', name: '산탄 파편', dmg: 21, rad: 40, push: 0.7, burn: 1, color: '#FF6B6B' }),
+    spread_c: W({ id: 'spread_c', kind: 'child', name: '산탄 파편', dmg: 22, rad: 41, push: 0.7, burn: 1, color: '#FF6B6B' }),
     rain: W({
       id: 'rain', name: '소이 폭우', kind: 'sub', type: '범위', dmg: 8, rad: 24, push: 0.3,
-      delay: 158, ammo: 4,
+      delay: 146, ammo: 4,
       /* 좌우로 넓게 흩뿌리면 제대로 조준해도 한 발밖에 안 닿는다 — 실제로 기본 무기보다 기대값이 낮았다.
          이제는 표적 바로 위에서 아래로 쏟아진다: 흩어지는 각을 14°로 좁히고 위로 던져 낙하시킨다.
          제대로 조준하면 다섯 발 중 두세 발이 닿고, 그만큼 화염이 겹친다. */
       split: { at: 'frac', frac: 0.86, n: 5, spread: 14, child: 'rain_c' }, color: '#FF9F45',
       desc: '표적 머리 위에서 다섯 발로 쏟아진다. 한 발당 피해는 5뿐이지만 화염이 한 겹씩 쌓인다 — 두세 발만 닿아도 이후 세 턴을 계속 태운다.'
     }),
-    rain_c: W({ id: 'rain_c', kind: 'child', name: '소이탄', dmg: 5, rad: 34, push: 0.35, burn: 1, color: '#FF9F45' }),
+    rain_c: W({ id: 'rain_c', kind: 'child', name: '소이탄', dmg: 5, rad: 35, push: 0.35, burn: 1, color: '#FF9F45' }),
 
     /* ── 드릴러 : 돌파 ───────────────────────────────────────── */
     bore: W({
-      id: 'bore', name: '천공탄', type: '돌파', dmg: 38, rad: 40, push: 0.9, delay: 102,
+      id: 'bore', name: '천공탄', type: '돌파', dmg: 38, rad: 41, push: 0.9, delay: 104,
       drill: 84, drillHits: 2, color: '#C9A227',
       desc: '지형에 박힌 뒤 파고들며 따닥 두 번 터진다. 피해는 절반씩 나뉘지만 구덩이는 두 개 생긴다 — 언덕을 뚫어 길을 낸다.'
     }),
     mole: W({
-      id: 'mole', name: '지저 관통', kind: 'sub', type: '돌파', dmg: 26, rad: 54, push: 1.0,
-      delay: 166, ammo: 3, shots: 2, spread: 3.2, drill: 280, drillHits: 2, color: '#E0B93A',
+      id: 'mole', name: '지저 관통', kind: 'sub', type: '돌파', dmg: 32, rad: 54, push: 1.0,
+      delay: 164, ammo: 3, shots: 2, spread: 3.2, drill: 280, drillHits: 2, color: '#E0B93A',
       desc: '두 발이 각각 암반을 파고들며 두 번씩 터진다 — 한 번 쏘면 구덩이 넷. 피해는 낮지만 발판을 통째로 들어낸다.'
     }),
 
@@ -96,7 +96,7 @@
     /* ── 가디언 : 범위 / 넉백 ────────────────────────────────── */
     /* 가디언은 맞아 가며 땅을 깎는 전차다. 피해로 이기지 않고, 발판을 지워서 이긴다. */
     mortar: W({
-      id: 'mortar', name: '곡사포', type: '범위', dmg: 34, rad: 82, push: 1.5, delay: 110,
+      id: 'mortar', name: '곡사포', type: '범위', dmg: 25, rad: 76, push: 1.5, delay: 124,
       grav: 1.35, color: '#8FD98F',
       desc: '피해는 낮고 반경이 넓다. 상대를 죽이는 게 아니라 상대가 선 자리를 지우는 용도다.'
     }),
@@ -109,19 +109,19 @@
     /* ── 팬텀 : 유도 저지연 ──────────────────────────────────── */
     /* 팬텀은 같은 유도지만 레이븐과 반대 방향이다.
        레이븐은 '빗나가도 붙여 주는' 관용이고, 팬텀은 '안 빗나가면 보상하는' 정밀이다.
-       streak: 같은 표적을 연속으로 맞힐수록 피해가 18%씩 늘고(최대 1.36배), 한 번 빗나가면 처음으로 돌아간다.
+       streak: 같은 표적을 연속으로 맞힐수록 피해가 20%씩 늘고(최대 1.40배), 한 번 빗나가면 처음으로 돌아간다.
        그래서 유도 보정폭(pull)은 레이븐보다 오히려 좁게 잡는다 — 관용까지 주면 두 전차가 같아진다. */
     wisp: W({
-      id: 'wisp', name: '유령탄', type: '유도', dmg: 26, rad: 34, push: 0.7, delay: 86,
+      id: 'wisp', name: '유령탄', type: '유도', dmg: 24, rad: 35, push: 0.7, delay: 86,
       homing: { rate: 300, after: 0.3, range: 1000, pull: 70 }, grav: 0.8, streak: true,
       color: '#C79BFF',
-      desc: '같은 표적을 연달아 맞힐수록 피해가 커진다(최대 1.36배). 한 번이라도 빗나가면 처음으로 돌아간다.'
+      desc: '같은 표적을 연달아 맞힐수록 피해가 커진다(최대 1.40배). 한 번이라도 빗나가면 처음으로 돌아간다.'
     }),
     hunter: W({
-      id: 'hunter', name: '추격자', kind: 'sub', type: '유도', dmg: 44, rad: 38, push: 1.1,
-      delay: 172, ammo: 3, homing: { rate: 420, after: 0.25, range: 1200, pull: 120 },
+      id: 'hunter', name: '추격자', kind: 'sub', type: '유도', dmg: 43, rad: 39, push: 1.1,
+      delay: 166, ammo: 3, homing: { rate: 420, after: 0.25, range: 1200, pull: 120 },
       grav: 0.75, streak: true, color: '#A06BFF',
-      desc: '유령탄으로 쌓아 둔 연속 명중을 그대로 이어받는다. 세 번째 명중이라면 이 한 방이 1.36배로 들어간다.'
+      desc: '유령탄으로 쌓아 둔 연속 명중을 그대로 이어받는다. 세 번째 명중이라면 이 한 방이 1.40배로 들어간다.'
     }),
 
     /* ── 크라켄 : 범위 다탄두 ────────────────────────────────── */
@@ -142,7 +142,7 @@
 
     /* ── 노바 : 집중 직사 ────────────────────────────────────── */
     lance: W({
-      id: 'lance', name: '광창', type: '집중', dmg: 50, rad: 34, push: 1.0, delay: 100,
+      id: 'lance', name: '광창', type: '집중', dmg: 44, rad: 32, push: 1.0, delay: 106,
       grav: 0.55, speed: 1.25, wind: 0.3, color: '#FFE27A',
       desc: '거의 직선으로 날아간다. 조준이 쉬운 대신 언덕을 못 넘는다.'
     }),

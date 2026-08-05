@@ -138,6 +138,70 @@ async function run() {
     !!errMsg && errMsg.indexOf('전송체') >= 0, errMsg);
   globalThis.makeTransport = saved;
 
+  console.log('\n7. 네 자리 방 — 2:2 와 1:1:1:1');
+  /* 2인 방에서만 맞는 '호스트=0, 게스트=1' 규칙으로는 셋 이상을 못 앉힌다.
+     여기서 보는 것은 자리가 겹치지 않는가, 그리고 넋이 끝까지 같은 판을 보는가 두 가지다. */
+  var lb4 = NET.loopback(4), R4 = lb4.rooms;
+  R4[0].setMode('ffa', 4);
+  for (var q = 1; q < 4; q++) R4[q].send({ t: 'hello', role: 'guest', pid: R4[q].pid });
+  await wait(40);
+
+  var seats = R4.map(function (r) { return r.seat(); });
+  ok('넷이 서로 다른 자리에 앉는다', seats.join() === '0,1,2,3', seats.join());
+  ok('정원이 찼다고 전원이 같이 판단한다', R4.every(function (r) { return r.full(); }));
+  ok('모드가 그대로 전파된다 (정원만으로는 duo/ffa 를 못 가린다)',
+    R4.every(function (r) { return r.mode === 'ffa'; }), R4.map(function (r) { return r.mode; }).join());
+
+  var want = ['nova', 'guardian', 'kraken', 'zephyr'];
+  R4.forEach(function (r) { r.pick(want[r.seat()]); });
+  await wait(60);
+  ok('각자 고른 전차가 한 표로 모인다', R4[0].picks.join() === want.join(), R4[0].picks.join());
+  ok('그 표를 전원이 똑같이 본다',
+    R4.every(function (r) { return r.picks.join() === want.join(); }));
+
+  // 명령은 브로드캐스트다 — 보낸 사람만 빼고 전원에게 가야 한다
+  var heard = [0, 0, 0, 0];
+  R4.forEach(function (r, i) { r.onCmd = function () { heard[i]++; }; });
+  R4[2].cmd({ t: 'aim', a: 40 });
+  await wait(30);
+  ok('명령이 보낸 사람 빼고 전원에게 간다', heard.join() === '1,1,0,1', heard.join());
+
+  /* 넋이 각자 자기 전차만 조작해도 네 판이 같은 상태로 굴러야 한다.
+     하나라도 어긋나면 그 클라이언트만 다른 지형을 보게 되고 되돌릴 방법이 없다. */
+  var cfg4 = { seed: 4242, mapId: 'canyon', mode: 'duo', picks: ['titan', 'phantom', 'stinger', 'kraken'] };
+  var M4 = R4.map(function () { return makeMatch(cfg4); });
+  R4.forEach(function (r, i) { r.onCmd = function (c) { M4[i].command(c); settle(M4[i]); }; });
+  ok('네 클라이언트의 초기 해시가 같다',
+    M4.every(function (m) { return m.hash() === M4[0].hash(); }), M4[0].hash().toString(16));
+
+  for (var tn = 0; tn < 8 && !M4[0].result; tn++) {
+    var owner = M4[0].current;                       // 자리 번호 = 전차 번호
+    var seq = [{ t: 'aim', a: 38 + tn * 3 }, { t: 'fire', p: 55 + tn * 2 }];
+    for (var si = 0; si < seq.length; si++) {
+      M4[owner].command(seq[si]); settle(M4[owner]);
+      R4[owner].cmd(seq[si]);
+      await wait(8);
+    }
+  }
+  ok('8턴을 돌려도 네 판이 한 글자도 안 어긋난다',
+    M4.every(function (m) { return m.hash() === M4[0].hash(); }),
+    M4.map(function (m) { return m.hash().toString(16); }).join(' '));
+
+
+  /* 게스트가 호스트보다 먼저 들어온 경우.
+     먼저 온 사람은 호스트의 hello 에 hi 로 답하므로,
+     hello 만 보고 자리를 주면 그 사람은 영원히 방에 못 앉는다. */
+  var lbE = NET.loopback(2);
+  var early = lbE.rooms[1], late = lbE.rooms[0];
+  early.send({ t: 'hello', role: 'guest', pid: early.pid });   // 호스트가 없을 때 외친다
+  await wait(20);
+  late.peers = [late.pid];
+  late.send({ t: 'hello', role: 'host', pid: late.pid });      // 뒤달아 방을 열었다
+  await wait(40);
+  ok('호스트보다 먼저 온 사람도 자리를 받는다',
+    late.peers.length === 2 && early.seat() === 1,
+    '인원 ' + late.peers.length + ' / 자리 ' + early.seat());
+
   console.log('\n' + '─'.repeat(56));
   console.log('통과 ' + pass + ' / 실패 ' + fail);
   console.log(fail ? '### FAIL ###' : '### ALL PASS ###');

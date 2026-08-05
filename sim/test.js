@@ -911,11 +911,17 @@ head('8c. 전차 10종 라운드로빈 (실측 승률)');
   /* 무기 실효값은 '모델'이고 이건 '실측'이다. 둘은 어긋날 수 있다 —
      실제로 타이탄은 실효값이 중간인데 승률 94%였다. 화력과 방어를 동시에 쥐고 있어서였다.
      모델만 보면 그런 조합을 못 잡는다. */
+  /* 표본이 좁으면 이 게이트는 밸런스가 아니라 잡음을 재게 된다.
+     ridge 한 맵 3판이면 전차당 27판, 표준편차가 10%p 가까이 나온다 —
+     같은 코드로 두 번 돌려 85%와 63%가 나올 수 있는 폭이다.
+     맵을 돌리고 표본을 늘려 그 폭을 절반으로 줄인다. 대신 이 절이 제일 느리다. */
+  var GMAPS = ['ridge', 'canyon', 'ridge', 'dunes'];
+
   function duel(a, b, n) {
     var wa = 0, wb = 0, turns = 0, done = 0;
     for (var s = 0; s < n; s++) {
       var m = new MT.Match({
-        mapId: 'ridge', seed: 500 + s, mode: 'solo',
+        mapId: GMAPS[s % GMAPS.length], seed: 500 + s, mode: 'solo',
         roster: [{ tank: a, ai: true, aiLevel: 2 }, { tank: b, ai: true, aiLevel: 2 }]
       });
       var g = 0;
@@ -945,7 +951,7 @@ head('8c. 전차 10종 라운드로빈 (실측 승률)');
   names.forEach(function (n) { win[n] = 0; tot[n] = 0; });
   for (var i = 0; i < names.length; i++) {
     for (var j = i + 1; j < names.length; j++) {
-      var r = duel(names[i], names[j], 3);
+      var r = duel(names[i], names[j], 8);
       win[names[i]] += r.wa; tot[names[i]] += r.done;
       win[names[j]] += r.wb; tot[names[j]] += r.done;
       sumT += r.turns * r.done; cnt += r.done;

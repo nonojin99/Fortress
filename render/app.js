@@ -24,75 +24,155 @@
     /* 마우스/터치 드래그로 맵을 탐색한다. 드래그 중에는 자동 추종을 끈다. */
     drag: null,
     camFollow: true,
-    camFollowT: 0
+    camFollowT: 0,
+    /* 전차별로 '지난 턴에 채웠던 게이지'. 게이지 위 화살표가 이걸 가리킨다. */
+    lastPower: {},
+    mySeat: 0
   };
 
   /* ── 메뉴 ─────────────────────────────────────────────────── */
 
-  var MODE_OPTS = [
-    { id: 'solo|ai', mode: 'solo', play: 'ai', label: '1 : 1  vs 컴퓨터' },
-    { id: 'solo|local', mode: 'solo', play: 'local', label: '1 : 1  한 화면' },
-    { id: 'duo|ai', mode: 'duo', play: 'ai', label: '2 : 2  팀전' },
-    { id: 'ffa|ai', mode: 'ffa', play: 'ai', label: '1 : 1 : 1 : 1  난전' },
-    { id: 'solo|online', mode: 'solo', play: 'online', label: '1 : 1  온라인' }
+  /* 싱글과 온라인을 한 줄에 섞어 두면, 온라인을 고른 뒤에도 'AI 실력' 칩이 계속 보인다.
+     고르는 축이 다르므로 칸을 나눈다 — 위 칸은 혼자 도는 판, 아래 칸은 방을 여는 판. */
+  var SOLO_OPTS = [
+    { mode: 'solo', play: 'ai', label: '1 : 1  vs 컴퓨터' },
+    { mode: 'solo', play: 'local', label: '1 : 1  한 화면' },
+    { mode: 'duo', play: 'ai', label: '2 : 2  팀전' },
+    { mode: 'ffa', play: 'ai', label: '1 : 1 : 1 : 1  난전' }
+  ];
+  var ONLINE_OPTS = [
+    { mode: 'solo', label: '1 : 1' },
+    { mode: 'duo', label: '2 : 2  팀전' },
+    { mode: 'ffa', label: '1 : 1 : 1 : 1  난전' }
   ];
 
   function seatCount() { return MT.MODES[cfg.mode].n; }
+  function isOnline() { return cfg.play === 'online'; }
+
+  function chip(label, pressed, onClick, disabled) {
+    var b = doc.createElement('button');
+    b.className = 'chip'; b.textContent = label;
+    b.setAttribute('aria-pressed', String(!!pressed));
+    b.disabled = !!disabled;
+    if (disabled) { b.style.opacity = '.4'; b.style.cursor = 'not-allowed'; }
+    b.onclick = onClick;
+    return b;
+  }
 
   function buildMenu() {
     var mr = $('modeRow');
     mr.innerHTML = '';
-    MODE_OPTS.forEach(function (o) {
-      var b = doc.createElement('button');
-      b.className = 'chip'; b.textContent = o.label;
-      b.onclick = function () {
+    SOLO_OPTS.forEach(function (o) {
+      mr.appendChild(chip(o.label, !isOnline() && cfg.mode === o.mode && cfg.play === o.play, function () {
+        if (G.room) leaveRoom();
         cfg.mode = o.mode; cfg.play = o.play; cfg.slot = 0;
-        buildMenu(); buildSlots();
-      };
-      b.setAttribute('aria-pressed', String(cfg.mode === o.mode && cfg.play === o.play));
-      mr.appendChild(b);
+        buildMenu();
+      }));
     });
 
     var ar = $('aiRow');
     ar.innerHTML = '<span class="note" style="align-self:center;margin-right:4px">컴퓨터 실력</span>';
     AI.LEVELS.forEach(function (L, i) {
-      var b = doc.createElement('button');
-      b.className = 'chip'; b.textContent = L.name;
-      b.setAttribute('aria-pressed', String(cfg.ai === i));
-      b.onclick = function () { cfg.ai = i; buildMenu(); };
-      ar.appendChild(b);
+      ar.appendChild(chip(L.name, cfg.ai === i, function () { cfg.ai = i; buildMenu(); }));
     });
+    ar.style.display = (!isOnline() && cfg.play === 'ai') ? '' : 'none';
+
+    /* 온라인 모드는 방 정원을 바꾼다. 이미 사람이 들어와 있는 방에서는 호스트만 바꿀 수 있고,
+       게스트가 바꾸면 자기 화면만 다른 모드가 되어 시작하는 순간 갈린다. */
+    var nr = $('netModeRow');
+    nr.innerHTML = '';
+    var lockedForGuest = !!(G.room && !G.isHost);
+    ONLINE_OPTS.forEach(function (o) {
+      nr.appendChild(chip(o.label, isOnline() && cfg.mode === o.mode, function () {
+        cfg.mode = o.mode; cfg.play = 'online'; cfg.slot = 0;
+        if (G.room && G.isHost) G.room.setMode(o.mode, MT.MODES[o.mode].n);
+        buildMenu();
+      }, lockedForGuest));
+    });
+
+    $('soloCard').classList.toggle('picked', !isOnline());
+    $('onlineCard').classList.toggle('picked', isOnline());
+    $('btnLeave').style.display = G.room ? '' : 'none';
 
     if (!$('tankGrid').childElementCount) buildTanks();
     if (!$('mapGrid').childElementCount) buildMaps();
     buildSlots();
+    buildLobby();
     markPicks();
-    $('startNote').textContent = cfg.play === 'online'
-      ? '온라인은 방을 만들거나 참가한 뒤 시작한다.'
+    $('startNote').textContent = isOnline()
+      ? (G.room
+        ? (G.room.full()
+          ? (G.isHost ? '정원이 찼다. 전투 개시를 누르면 전원이 같이 시작한다.' : '호스트가 시작하기를 기다린다.')
+          : ('참가자 ' + G.room.peers.length + ' / ' + seatCount() + ' — 아직 자리가 빈다.'))
+        : '방을 만들거나 코드를 넣고 참가한다.')
       : MT.MODES[cfg.mode].label + ' · ' + (cfg.play === 'local' ? '한 기기에서 번갈아' : '컴퓨터 ' + AI.LEVELS[cfg.ai].name);
+  }
+
+  /* 온라인에서 내 자리는 호스트가 정한다 — 아무 자리나 눌러 남의 전차를 고를 수 없다. */
+  function mySeatIndex() {
+    if (!isOnline()) return cfg.slot;
+    return G.room ? Math.max(0, G.room.seat()) : 0;
   }
 
   function buildSlots() {
     var sr = $('slotRow'); sr.innerHTML = '';
-    var n = seatCount();
+    var n = seatCount(), mine = mySeatIndex();
+    if (isOnline()) cfg.slot = mine;
     var label = doc.createElement('span');
     label.className = 'note'; label.style.alignSelf = 'center'; label.style.marginRight = '4px';
-    label.textContent = n > 1 ? '자리를 고르고 전차를 누른다' : '';
+    label.textContent = isOnline() ? '내 자리의 전차만 고를 수 있다'
+      : (n > 1 ? '자리를 고르고 전차를 누른다' : '');
     sr.appendChild(label);
     for (var i = 0; i < n; i++) (function (i) {
       var t = MT.MODES[cfg.mode].teams[i];
       var who = cfg.play === 'local' ? ('P' + (i + 1))
-        : (cfg.play === 'online' ? (i === 0 ? '호스트' : '게스트')
+        : (isOnline() ? (i === mine ? '나' : ('P' + (i + 1)))
           : (i === 0 ? '나' : (cfg.mode === 'duo' && t === 0 ? '아군 AI' : 'AI')));
       var b = doc.createElement('button');
       b.className = 'chip';
       b.innerHTML = '<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:' +
-        TEAM_COLORS[t] + ';margin-right:6px"></span>' + who + ' · ' +
-        (cfg.picks[i] === 'random' ? '랜덤' : TANKS.get(cfg.picks[i]).name);
+        TEAM_COLORS[t] + ';margin-right:6px"></span>' + who + ' · ' + pickName(i);
       b.setAttribute('aria-pressed', String(cfg.slot === i));
+      b.disabled = isOnline() && i !== mine;
       b.onclick = function () { cfg.slot = i; buildMenu(); };
       sr.appendChild(b);
     })(i);
+  }
+
+  /* 온라인에서 남의 자리는 방이 알려 준 것만 쓴다.
+     cfg.picks 로 흘러가면 아직 아무도 안 고른 자리에 내 로컬 기본값(볼케이노·드릴러)이 뜨고,
+     상대가 그 전차를 고른 줄 알고 카운터를 맞추게 된다. */
+  function pickName(i) {
+    var p;
+    if (isOnline()) p = (G.room && G.room.picks[i]) || (i === mySeatIndex() ? cfg.picks[i] : null);
+    else p = cfg.picks[i];
+    return !p || p === 'random' ? '랜덤' : TANKS.get(p).name;
+  }
+
+  /* 로비 — 누가 어느 자리에 앉았고 무엇을 골랐는지. 정원이 차야 시작할 수 있다. */
+  function buildLobby() {
+    var host = $('lobby');
+    host.innerHTML = '';
+    if (!isOnline() || !G.room) return;
+    var n = seatCount(), mine = G.room.seat();
+    for (var i = 0; i < n; i++) {
+      var taken = i < G.room.peers.length;
+      var d = doc.createElement('div');
+      d.className = 'seat' + (i === mine ? ' me' : '') + (taken ? '' : ' empty');
+      d.innerHTML = '<span class="dot" style="background:' + TEAM_COLORS[MT.MODES[cfg.mode].teams[i]] + '"></span>' +
+        '<span class="who">' + (i === mine ? '나' : (i === 0 ? '호스트' : 'P' + (i + 1))) + '</span>' +
+        '<span class="tk">' + (taken ? pickName(i) : '빈자리') + '</span>';
+      host.appendChild(d);
+    }
+  }
+
+  /* 전차 선택 한 곳. 온라인이면 내 자리에만 쓰고, 그 사실을 방에 알린다 —
+     알리지 않으면 호스트가 내 선택을 모른 채 판을 시작해 내가 안 고른 전차로 싸우게 된다. */
+  function choosePick(id) {
+    var i = mySeatIndex();
+    cfg.picks[i] = id;
+    if (isOnline() && G.room) G.room.pick(id);
+    buildMenu();
   }
 
   /* 'random' 은 전차 id 가 아니라 자리표시자다. 판을 시작할 때 실제 전차로 바뀌고,
@@ -117,7 +197,7 @@
       '<div class="st"><span>10종 중 하나</span></div>' +
       '<div class="wp">고르기 어려울 때. 시작할 때 정해진다.</div>';
     rb.title = '판을 시작할 때 10종 중 하나로 정해진다';
-    rb.onclick = function () { cfg.picks[cfg.slot] = 'random'; buildMenu(); };
+    rb.onclick = function () { choosePick('random'); };
     g.appendChild(rb);
     (function (cv) {
       var x = cv.getContext('2d');
@@ -138,7 +218,7 @@
         '<div class="wp"><b>' + main.name + '</b> <span style="color:var(--brass)">' + main.type + '</span> ' + main.dmg + '/딜' + main.delay + '<br>' +
         '<b>' + sub.name + '</b> <span style="color:var(--brass)">' + sub.type + '</span> ' + sub.dmg + '×' + sub.ammo + '발</div>';
       b.title = t.note;
-      b.onclick = function () { cfg.picks[cfg.slot] = t.id; buildMenu(); };
+      b.onclick = function () { choosePick(t.id); };
       g.appendChild(b);
       drawTankPreview(b.querySelector('canvas'), t);
     });
@@ -226,10 +306,12 @@
   function makeRoster(seed) {
     var n = seatCount(), teams = MT.MODES[cfg.mode].teams, out = [];
     for (var i = 0; i < n; i++) {
+      /* 온라인에서는 자리가 전부 사람이다. 사람이 덜 찼으면 애초에 시작할 수 없으므로
+         빈자리를 AI 로 메우지 않는다 — 그러면 클라이언트마다 AI 가 따로 굴러 판이 갈린다. */
       var isMe = cfg.play === 'local' ? true
-        : (cfg.play === 'online' ? (G.isHost ? i === 0 : i === 1) : i === 0);
+        : (isOnline() ? i === G.mySeat : i === 0);
       out.push({
-        tank: cfg.picks[i], ai: !isMe && cfg.play !== 'online', aiLevel: cfg.ai,
+        tank: cfg.picks[i], ai: !isMe && !isOnline(), aiLevel: cfg.ai,
         team: teams[i],
         label: TANKS.get(cfg.picks[i]).name
       });
@@ -242,6 +324,15 @@
     var mapId = shared ? shared.mapId : (cfg.mapId === 'random' ? MAPS.list[(Math.random() * MAPS.list.length) | 0].id : cfg.mapId);
     if (shared) { cfg.mode = shared.mode; cfg.picks = shared.picks.slice(); }
 
+    /* 내 자리는 호스트가 확정한 자리표에서 읽는다. 여기서 한 번 고정해 두면
+       판이 도는 동안 자리표가 바뀌어도(누가 나가도) 조종 대상이 흔들리지 않는다. */
+    G.mySeat = isOnline() && G.room ? Math.max(0, G.room.seat()) : 0;
+
+    /* 호스트는 각자가 고른 전차를 자리표에서 모아 온다. 안 고른 자리는 랜덤으로 남는다. */
+    if (isOnline() && G.isHost && G.room) {
+      for (var qi = 0; qi < seatCount(); qi++) cfg.picks[qi] = G.room.picks[qi] || 'random';
+    }
+
     /* 랜덤 선택을 여기서 확정한다. shared 가 있으면 호스트가 이미 정한 것을 그대로 쓴다. */
     var picks = shared ? shared.picks.slice() : resolvePicks(seatCount());
     for (var pi = 0; pi < picks.length; pi++) cfg.picks[pi] = picks[pi];
@@ -251,9 +342,10 @@
     G.scene = new DRAW.Scene(G.match.world, G.match.map);
     G.fx = new FXM.FX();
     G.ai = null; G.charging = false; G.power = 0; G.ended = false;
+    G.lastPower = {};
     G.seats = [];
     for (var i = 0; i < roster.length; i++) if (!roster[i].ai) G.seats.push(i);
-    if (cfg.play === 'online') G.seats = [G.isHost ? 0 : 1];
+    if (isOnline()) G.seats = [G.mySeat];
 
     var a = G.match.actor();
     G.cam.x = C.clamp(a.x - VIEW.w / 2, 0, G.match.map.w - VIEW.w);
@@ -301,9 +393,15 @@
       var chg = d.chargeTurns
         ? (t.charge >= d.chargeTurns ? ' · 발사 준비됨' : ' · 누르면 기 모으기(' + t.charge + '/' + d.chargeTurns + ')')
         : '';
-      b.innerHTML = '<div class="wn">' + (i + 1) + '. ' + d.name + '</div><div class="wt">' + d.type +
+      /* 탄약이 유한한 보조무기는 남은 발수를 이름 옆에 붙인다.
+         아래 줄에만 적어 두면 조준하는 동안 눈이 가지 않아 마지막 한 발을 모르고 쓴다. */
+      var left = d.ammo ? (t.ammo[id] || 0) : -1;
+      var badge = left < 0 ? ''
+        : ' <span style="color:' + (left > 0 ? 'var(--brass)' : 'var(--alert)') + '">' + left + '발</span>';
+      b.innerHTML = '<div class="wn">' + (i + 1) + '. ' + d.name + badge + '</div><div class="wt">' + d.type +
         ' · 딜레이 ' + d.delay + chg + '</div><div class="wa">' +
-        (d.ammo ? ('남은 탄 ' + (t.ammo[id] || 0)) : '무한') + ' · 피해 ' + d.dmg + ' · 반경 ' + d.rad + '</div>';
+        (left < 0 ? '탄약 무한' : ('남은 ' + left + ' / ' + d.ammo + '발')) +
+        ' · 피해 ' + d.dmg + ' · 반경 ' + d.rad + '</div>';
       b.title = d.desc || '';
       b.disabled = !!d.ammo && !(t.ammo[id] > 0);
       b.setAttribute('aria-pressed', String(t.weapon === id));
@@ -314,6 +412,16 @@
 
   /* 아이템 막대. 가진 것만 보여 준다 — 없는 칸을 회색으로 늘어놓으면
      "왜 못 쓰지"를 매번 확인하게 되고, 정작 생겼을 때 눈에 안 띈다. */
+  /* 아이템 막대와 단축키(3~9)가 같은 목록을 봐야 한다.
+     따로 만들면 발동한 버프가 목록에 남는 순간 번호가 하나씩 밀려 엉뚱한 것이 쓰인다. */
+  function ownedItems(t) {
+    var IT = root.TFItems;
+    if (!IT || !t) return [];
+    return IT.order.filter(function (id) {
+      return (t.items[id] || 0) > 0 || (t.buff && t.buff[id]);
+    });
+  }
+
   function buildItems() {
     var host = $('items');
     var IT = root.TFItems;
@@ -322,20 +430,28 @@
     var t = G.match.actor();
     if (!t) return;
     var mine = myTurn();
-    var owned = IT.order.filter(function (id) { return (t.items[id] || 0) > 0; });
+    /* 발동해 둔 탄 버프는 개수가 0이어도 남긴다.
+       강화탄을 마지막 하나로 켜면 items[id] 가 0이 되어 목록에서 빠졌고,
+       그러면 '지금 쏘면 1.6배가 실린다'는 사실이 화면 어디에도 없었다. */
+    var owned = ownedItems(t);
     if (!owned.length) {
       host.innerHTML = '<span class="none">아이템 없음 — 뒤처질수록 자주 나온다</span>';
       return;
     }
     owned.forEach(function (id, i) {
       var d = IT.get(id);
+      var left = t.items[id] || 0;
+      var armed = !!(t.buff && t.buff[id]);
       var b = doc.createElement('button');
-      b.className = 'ibtn' + (t.buff && t.buff[id] ? ' on' : '');
-      b.title = d.desc;
-      b.disabled = !mine;
+      b.className = 'ibtn' + (armed ? ' on armed' : '');
+      /* 남은 개수와 '지금 장전됨'은 다른 정보다. 둘을 한 숫자로 합치면
+         켜 놓은 것을 안 켰다고 읽거나 그 반대로 읽는다. */
+      b.title = d.desc + (armed ? '\n\n지금 발사에 실려 있다.' : '') + '\n남은 개수 ' + left;
+      b.disabled = !mine || (left <= 0);
       b.innerHTML = '<span class="k">' + (i + 3) + '</span>' +
         '<span class="mk" style="color:' + d.color + '">' + d.mark + '</span>' +
-        '<span class="nm">' + d.name + '</span><span class="ct">×' + t.items[id] + '</span>';
+        '<span class="nm">' + d.name + '</span>' +
+        '<span class="ct">' + (armed ? '장전 · ' : '') + '남은 ' + left + '</span>';
       b.onclick = function () { useItem(id); };
       host.appendChild(b);
     });
@@ -380,6 +496,16 @@
     $('gBar').style.width = p + '%';
     $('gVal').textContent = Math.round(p);
     $('gLabel').textContent = G.charging ? '충전 중 — 떼면 발사' : '게이지';
+
+    /* 이 사수가 지난번에 쏜 게이지. 자리를 안 옮겼다면 같은 값이 같은 곳에 떨어진다. */
+    var prev = G.lastPower[t.id];
+    var mk = $('gMark');
+    if (prev == null) mk.style.display = 'none';
+    else {
+      mk.style.display = 'block';
+      mk.style.left = prev + '%';
+      mk.title = '지난 발사 ' + Math.round(prev);
+    }
     $('fBar').style.width = (100 * t.fuel / t.fuelMax) + '%';
     $('fVal').textContent = Math.round(t.fuel);
 
@@ -409,7 +535,11 @@
   function doCmd(c, fromNet) {
     var m = G.match;
     if (!m) return false;
+    /* 발사 게이지는 명령이 통과하기 *전에* 사수를 잡아 둬야 한다 —
+       command 가 턴을 넘겨 버리면 그 값이 다음 사람 앞으로 기록된다. */
+    var firer = c.t === 'fire' ? m.actor() : null;
     var okc = m.command(c);
+    if (okc && firer) G.lastPower[firer.id] = C.clamp(c.p, 0, 100);
     if (okc && !fromNet && G.online) G.room.cmd(c);
     return okc;
   }
@@ -428,11 +558,10 @@
       else if (k === '1') { doCmd({ t: 'weapon', w: G.match.actor().def.main }); buildWeaponBar(); }
       else if (k === '2') { doCmd({ t: 'weapon', w: G.match.actor().def.sub }); buildWeaponBar(); }
       else if (k >= '3' && k <= '9') {
-        var IT = root.TFItems, tk = G.match.actor();
-        if (IT && tk) {
-          var owned = IT.order.filter(function (id) { return (tk.items[id] || 0) > 0; });
-          var pick = owned[+k - 3];
-          if (pick) useItem(pick);
+        var tk = G.match.actor();
+        if (tk) {
+          var pick = ownedItems(tk)[+k - 3];
+          if (pick && (tk.items[pick] || 0) > 0) useItem(pick);
         }
       }
       else if (k === 'z' || k === 'Z' || k === 'ㅋ') doCmd({ t: 'dir', d: -G.match.actor().dir });
@@ -502,16 +631,22 @@
     }
 
     $('btnStart').onclick = function () {
-      if (cfg.play === 'online' && !(G.room && G.room.peerReady)) {
-        $('netMsg').textContent = '상대가 아직 없습니다.'; return;
+      if (isOnline()) {
+        if (!G.room) { $('netMsg').textContent = '먼저 방을 만들거나 참가하세요.'; return; }
+        if (!G.isHost) { $('netMsg').textContent = '호스트가 시작합니다.'; return; }
+        if (!G.room.full()) {
+          $('netMsg').textContent = '정원이 아직 안 찼습니다 (' +
+            G.room.peers.length + '/' + seatCount() + ').';
+          return;
+        }
       }
-      if (cfg.play === 'online' && !G.isHost) { $('netMsg').textContent = '호스트가 시작합니다.'; return; }
       start(null);
     };
     $('btnMenu').onclick = toMenu;
     $('btnAgain').onclick = function () { if (!G.online || G.isHost) start(null); };
     $('btnHost').onclick = function () { openRoom(true); };
     $('btnJoin').onclick = function () { openRoom(false); };
+    $('btnLeave').onclick = function () { leaveRoom(); buildMenu(); };
   }
 
   function heldDir() {
@@ -691,6 +826,8 @@
 
   /* ── 카메라 ───────────────────────────────────────────────── */
 
+  var TRANSIT_SPEED = 0.8;   // 착탄 후 다음 사수로 넘어가는 이동의 속도 배율
+
   function camera(dt) {
     var m = G.match;
     if (!m) return;
@@ -714,7 +851,10 @@
     }
     var gx = C.clamp(tx - VIEW.w / 2, 0, Math.max(0, m.map.w - VIEW.w));
     var gy = C.clamp(ty - VIEW.h / 2, 0, Math.max(0, m.map.h - VIEW.h));
-    var k = 1 - Math.pow(s ? 0.00006 : 0.0009, dt);
+    /* 포탄을 쫓을 때는 빠르게 붙어야 탄이 화면 밖으로 안 샌다.
+       탄이 다 떨어진 뒤 다음 사수로 넘어가는 이동은 그럴 필요가 없고, 오히려 확 튀면
+       무엇이 부서졌는지 못 보고 지나간다. 그 구간만 80% 속도로 늦춘다. */
+    var k = 1 - Math.pow(s ? 0.00006 : 0.0009, dt * (s ? 1 : TRANSIT_SPEED));
     G.cam.x += (gx - G.cam.x) * k;
     G.cam.y += (gy - G.cam.y) * k;
   }
@@ -762,16 +902,28 @@
     var code = ($('roomCode').value || '').toUpperCase().trim();
     if (asHost && !code) { code = root.TFNet.makeCode(); $('roomCode').value = code; }
     if (!code) { $('netMsg').textContent = '방 코드를 입력하세요.'; return; }
-    cfg.play = 'online'; cfg.mode = 'solo';
+    if (G.room) leaveRoom();
+    cfg.play = 'online';
     G.isHost = asHost;
     G.room = new root.TFNet.Room();
+    /* 정원은 모드가 정한다. 호스트는 자기가 고른 모드로 열고, 게스트는 들어가서 자리표를 받아 맞춘다 —
+       게스트가 미리 정한 정원을 우기면 인원이 다 찼는지 서로 다르게 판단한다. */
+    G.room.mode = cfg.mode;
+    G.room.capacity = MT.MODES[cfg.mode].n;
     $('netMsg').textContent = '연결 중…';
     G.room.open(code, asHost ? 'host' : 'guest', function (err) {
-      if (err) { $('netMsg').textContent = err.message; G.room = null; return; }
+      if (err) { $('netMsg').textContent = err.message; G.room = null; buildMenu(); return; }
       G.online = true;
-      $('netMsg').textContent = (asHost ? '방 ' + code + ' — 상대를 기다립니다' : code + ' 방에 들어갔습니다');
-      G.room.onPeer = function () {
-        $('netMsg').textContent = '상대 접속됨. ' + (asHost ? '전투 개시를 누르세요.' : '호스트를 기다립니다.');
+      $('netMsg').textContent = asHost ? ('방 ' + code + ' — 참가자를 기다립니다') : (code + ' 방에 들어갔습니다');
+
+      G.room.onPeer = function () { buildMenu(); };
+      /* 자리표가 오면 모드도 그것에 맞춘다. 호스트가 2:2 로 연 방에 1:1 화면으로 앉아 있으면
+         전차를 둘만 만들고 나머지 둘의 명령을 버린다 — 그 순간 판이 갈린다. */
+      G.room.onSeats = function () {
+        if (!asHost && MT.MODES[G.room.mode]) cfg.mode = G.room.mode;
+        $('netMsg').textContent = '참가 ' + G.room.peers.length + ' / ' + G.room.capacity +
+          (G.room.full() ? ' — 준비 완료' : ' — 대기 중');
+        buildMenu();
       };
       G.room.onStart = function (shared) { if (!asHost) start(shared); };
       G.room.onCmd = function (c) { if (G.match) doCmd(c, true); };
@@ -782,9 +934,16 @@
           root.TFApp.refresh();          // 아이템·탄약이 스냅샷으로 바뀌었으면 HUD 도 따라가야 한다
         }
       };
-      G.room.onError = function (e) { $('netMsg').textContent = e.message; };
+      G.room.onError = function (e) { $('netMsg').textContent = e.message; buildMenu(); };
+      if (asHost) G.room.publishSeats();
       buildMenu();
     });
+  }
+
+  function leaveRoom() {
+    if (G.room) { G.room.close(); G.room = null; }
+    G.online = false; G.isHost = false; G.mySeat = 0;
+    $('netMsg').textContent = '';
   }
 
   /* ── 부팅 ─────────────────────────────────────────────────── */
@@ -803,6 +962,8 @@
      루프 밖에서 상태를 건드린 경우(스냅샷 복구, 검증 스크립트)에는 부를 곳이 필요하다. */
   root.TFApp = {
     G: G, cfg: cfg, start: start, VIEW: VIEW,
-    refresh: function () { if (G.match) { buildWeaponBar(); buildRoster(); buildItems(); } }
+    /* updateHUD 까지 부른다. 스냅샷으로 복구하면 바람·타이머·게이지 표식도 옛 값이고,
+       루프가 다음 프레임에 고쳐 주긴 하지만 그 한 프레임을 사람이 본다. */
+    refresh: function () { if (G.match) { buildWeaponBar(); buildRoster(); buildItems(); updateHUD(); } }
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this, document);
