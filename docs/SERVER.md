@@ -69,23 +69,29 @@ Supabase 채널을 `broadcast: { self: false }` 로 여는 것이 그 조건이�
 
 ## A. Supabase (권장 · 서버 코드 0줄)
 
+**이미 설정되어 있다.** 아래는 다른 프로젝트로 옮길 때 보는 순서다.
+
 1. supabase.com 에서 프로젝트를 만든다.
-2. **Settings → API** 에서 `Project URL` 과 `anon public` 키를 복사한다.
-   `service_role` 키는 쓰지 않는다. 브라우저에 들어가는 키다.
-3. `net/supabase-transport.js` 의 두 줄을 채운다.
+2. **Settings → API** 에서 `Project URL` 과 **publishable**(구 버전은 `anon public`) 키를 복사한다.
+   `service_role` 키는 절대 쓰지 않는다 — 브라우저에 그대로 드러나는 자리다.
+3. `net/supabase-transport.js` 상단의 두 줄을 바꿈다.
 
 ```js
-var URL = 'https://xxxxxxxx.supabase.co';
-var KEY = 'eyJhbGciOi...';
+var URL = 'https://ijmmqmarbkkkssciagof.supabase.co';
+var KEY = 'sb_publishable_...';
 ```
 
-4. 단일 파일 빌드를 쓸 거라면 `shell.html` 의 `<head>` 에 supabase-js 를 먼저 싣는다.
+   키를 **빌드 결과물(`index.html`)에만 넣지 않는다.**
+   다음 `python build.py` 가 조용히 지우기 때문이다. 실제로 한 번 그렇게 날아갔다.
+   다시 빌드하지 않고 바꾸고 싶으면 `window.TF_SUPABASE = { url, key }` 를 쓰면 된다.
+
+4. `shell.html` 의 `<head>` 가 supabase-js 를 실어야 한다.
 
 ```html
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
 ```
 
-이미 `shell.html` 의 `<head>` 가 이 태그를 싱고 있다(unpkg 폴백 포함). 버전을 올릴 때만 손대면 된다.
+이미 `shell.html` 의 `<head>` 가 이 태그를 싣고 있다(unpkg 폴백 포함). 버전을 올릴 때만 손대면 된다.
 경로의 `dist/umd/` 를 빼면 전역이 안 생겨 온라인만 조용히 죽는다.
 
 5. `python build.py` 로 다시 빌드한다.
