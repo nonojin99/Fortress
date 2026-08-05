@@ -1,0 +1,22 @@
+node_modules/
+__pycache__/
+.DS_Store
+*.bak
+
+# 환경 변수 — Supabase publishable 키는 소스에 두지만(클라이언트 공개용),
+# service_role 같은 진짜 비밀은 절대 저장소에 넣지 않는다.
+.env
+.env.*
+
+# 저장소 밖으로 복사되는 배포본. index.html 과 내용이 같다.
+tank-fortress.html
+
+# 작업용 이미지 원본
+imagine_images/
+
+# ── 여기부터는 '무시하지 않는다' 는 결정이다 ──────────────────
+# art/art.js (1.1MB) 와 index.html (1.4MB) 은 한때 용량 때문에 제외했었다.
+# 그 결과 저장소만 받아서는 build.py 가 돌지 않았고, 배포본이 소스보다
+# 몇 주 앞선 상태로 굳어 버렸다. 둘 다 추적한다 —
+# art/art.js 는 빌드 입력이라 없으면 재현이 안 되고,
+# index.html 은 GitHub Pages 가 그대로 서빙하는 실제 배포 대상이다.
